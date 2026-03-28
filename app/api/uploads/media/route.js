@@ -1,8 +1,9 @@
 import path from "node:path";
-import { NextResponse } from "next/server";
 import { canWriteArticles, getUserFromRequest } from "@/lib/auth";
 import { saveUpload } from "@/lib/files";
-import { assertSameOrigin } from "@/lib/security";
+import { jsonError, jsonSuccess } from "@/lib/api";
+import { assertStateChangeAllowed, logAuditEvent } from "@/lib/ops";
+import { withErrorCode } from "@/lib/security";
 
 const mediaTypes = {
   image: {
@@ -17,11 +18,11 @@ const mediaTypes = {
 
 export async function POST(request) {
   try {
-    assertSameOrigin(request);
+    await assertStateChangeAllowed(request, "media.upload", { limit: 30, windowMs: 60 * 60_000 });
     const user = await getUserFromRequest(request);
 
     if (!canWriteArticles(user)) {
-      return NextResponse.json({ error: "기사 작성 권한이 필요합니다." }, { status: 403 });
+      throw withErrorCode(new Error("기사 작성 권한이 필요합니다."), "FORBIDDEN", 403);
     }
 
     const formData = await request.formData();
@@ -30,31 +31,36 @@ export async function POST(request) {
     const config = mediaTypes[kind];
 
     if (!config) {
-      return NextResponse.json({ error: "허용되지 않은 업로드 종류입니다." }, { status: 400 });
+      throw withErrorCode(new Error("허용되지 않은 업로드 종류입니다."), "UPLOAD_KIND_INVALID", 400);
     }
 
     if (!(file instanceof File)) {
-      return NextResponse.json({ error: "업로드할 파일을 선택해 주세요." }, { status: 400 });
+      throw withErrorCode(new Error("업로드할 파일을 선택해 주세요."), "FILE_REQUIRED", 400);
     }
 
     const extension = path.extname(file.name).toLowerCase();
 
     if (!config.extensions.includes(extension)) {
-      return NextResponse.json({ error: "허용되지 않은 파일 형식입니다." }, { status: 400 });
+      throw withErrorCode(new Error("허용되지 않은 파일 형식입니다."), "FILE_TYPE_INVALID", 400);
     }
 
     const upload = await saveUpload(file, {
       directory: config.directory,
       allowedExtensions: config.extensions,
-      fallbackExtension: config.extensions[0]
+      fallbackExtension: config.extensions[0],
+      maxBytes: kind === "video" ? 40 * 1024 * 1024 : 10 * 1024 * 1024
     });
 
-    return NextResponse.json({
-      ok: true,
+    await logAuditEvent("media.uploaded", {
+      userId: user.id,
+      kind,
+      storedFileName: upload.storedFileName
+    });
+    return jsonSuccess({
       url: `/api/media/${upload.storedFileName}`,
       upload
     });
   } catch (error) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
+    return jsonError(error, { code: "MEDIA_UPLOAD_FAILED" });
   }
 }

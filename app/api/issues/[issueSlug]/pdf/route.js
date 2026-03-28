@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { canManageAdmin, getUserFromRequest } from "@/lib/auth";
+import { jsonError } from "@/lib/api";
 import { getIssueBundle } from "@/lib/content";
 import { renderIssuePdf } from "@/lib/issue-pdf";
 
@@ -19,7 +20,7 @@ export async function GET(request, { params }) {
     }
 
     if (!bundle) {
-      return NextResponse.json({ error: "호수를 찾을 수 없습니다." }, { status: 404 });
+      return jsonError(Object.assign(new Error("호수를 찾을 수 없습니다."), { status: 404, code: "ISSUE_NOT_FOUND" }));
     }
 
     const pdfBuffer = await renderIssuePdf(bundle);
@@ -32,6 +33,6 @@ export async function GET(request, { params }) {
       }
     });
   } catch (error) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
+    return jsonError(error, { code: "ISSUE_PDF_FAILED" });
   }
 }

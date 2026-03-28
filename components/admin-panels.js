@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { parseApiError } from "@/lib/api-client";
 
 export function AdminNav() {
   return (
@@ -127,9 +128,59 @@ export function AdminAccountsPanel({ users }) {
       body: JSON.stringify({ role })
     });
 
-    if (response.ok) {
-      router.refresh();
+    const payload = await response.json();
+
+    if (!response.ok) {
+      setAccountMessage(parseApiError(payload, "권한 변경에 실패했습니다."));
+      return;
     }
+
+    setAccountMessage("권한을 변경했습니다.");
+    router.refresh();
+  }
+
+  async function updateBanStatus(userId, status) {
+    const reason = status === "banned" ? window.prompt("차단 사유를 입력해 주세요.", "운영 정책 위반") || "" : "";
+    const response = await fetch(`/api/admin/users/${userId}/ban`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ status, reason })
+    });
+    const payload = await response.json();
+
+    if (!response.ok) {
+      setAccountMessage(parseApiError(payload, "상태 변경에 실패했습니다."));
+      return;
+    }
+
+    setAccountMessage(status === "banned" ? "계정을 차단했습니다." : "계정 차단을 해제했습니다.");
+    router.refresh();
+  }
+
+  async function resetLocalPassword(userId) {
+    const password = window.prompt("새 비밀번호를 입력해 주세요. 8자 이상이어야 합니다.", "");
+
+    if (!password) {
+      return;
+    }
+
+    const response = await fetch(`/api/admin/users/${userId}/password`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ password })
+    });
+    const payload = await response.json();
+
+    if (!response.ok) {
+      setAccountMessage(parseApiError(payload, "비밀번호 재설정에 실패했습니다."));
+      return;
+    }
+
+    setAccountMessage("비밀번호를 재설정했습니다.");
   }
 
   async function createManagedAccount(event) {
@@ -149,7 +200,7 @@ export function AdminAccountsPanel({ users }) {
       const payload = await response.json();
 
       if (!response.ok) {
-        throw new Error(payload.error || "계정 생성에 실패했습니다.");
+        throw new Error(parseApiError(payload, "계정 생성에 실패했습니다."));
       }
 
       setAccountForm({
@@ -184,15 +235,28 @@ export function AdminAccountsPanel({ users }) {
               <div>
                 <strong>{user.nickname}</strong>
                 <p>
-                  {user.name} · {user.authProvider === "local" ? `local:${user.loginId}` : `riro:${user.riroId}`} · 현재 역할 {user.role}
+                  {user.name} · {user.authProvider === "local" ? `local:${user.loginId}` : `riro:${user.riroId}`} · 현재 역할 {user.role} · 상태 {user.status}
                 </p>
+                {user.status === "banned" ? <p className="error-note">차단 사유: {user.banReason || "운영 정책 위반"}</p> : null}
               </div>
-              <select defaultValue={user.role} onChange={(event) => updateRole(user.id, event.target.value)}>
-                <option value="member">member</option>
-                <option value="reporter">reporter</option>
-                <option value="teacher">teacher</option>
-                <option value="admin">admin</option>
-              </select>
+              <div className="admin-score-controls">
+                <select defaultValue={user.role} onChange={(event) => updateRole(user.id, event.target.value)}>
+                  <option value="member">member</option>
+                  <option value="reporter">reporter</option>
+                  <option value="teacher">teacher</option>
+                  <option value="admin">admin</option>
+                </select>
+                {user.role !== "admin" ? (
+                  <button className="ghost-button" onClick={() => updateBanStatus(user.id, user.status === "banned" ? "active" : "banned")} type="button">
+                    {user.status === "banned" ? "차단 해제" : "차단"}
+                  </button>
+                ) : null}
+                {user.authProvider === "local" ? (
+                  <button className="ghost-button" onClick={() => resetLocalPassword(user.id)} type="button">
+                    비밀번호 재설정
+                  </button>
+                ) : null}
+              </div>
             </div>
           ))}
         </div>
@@ -244,7 +308,7 @@ export function AdminAccountsPanel({ users }) {
             <button className="primary-button" disabled={pendingAccount} type="submit">
               {pendingAccount ? "생성 중..." : "계정 생성"}
             </button>
-            {accountMessage ? <p className="status-note">{accountMessage}</p> : null}
+            {accountMessage ? <p className={accountMessage.includes("실패") ? "error-note" : "status-note"}>{accountMessage}</p> : null}
           </div>
         </form>
       </section>
@@ -263,9 +327,7 @@ export function AdminEditorialPanel({ issues, articles }) {
       }
     });
 
-    if (response.ok) {
-      router.refresh();
-    }
+    if (response.ok) router.refresh();
   }
 
   return (
@@ -367,7 +429,7 @@ export function AdminHallPanel({ articles, submissions }) {
       const payload = await response.json();
 
       if (!response.ok) {
-        throw new Error(payload.error || "문제 생성에 실패했습니다.");
+        throw new Error(parseApiError(payload, "문제 생성에 실패했습니다."));
       }
 
       setProblemForm({
@@ -375,6 +437,7 @@ export function AdminHallPanel({ articles, submissions }) {
         title: "",
         prompt: ""
       });
+      setProblemMessage("문제를 등록했습니다.");
       router.refresh();
     } catch (error) {
       setProblemMessage(error.message);
@@ -440,10 +503,12 @@ export function AdminHallPanel({ articles, submissions }) {
                 <p>
                   {submission.problem?.title ?? "문제 없음"} · {new Date(submission.submittedAt).toLocaleString("ko-KR")}
                 </p>
-                <p>{submission.originalFileName}</p>
+                <p>
+                  {submission.originalFileName} · {submission.fileKind === "image" ? "이미지 제출" : "PDF 제출"}
+                </p>
                 {submission.storedFileName ? (
                   <a href={`/api/admin/hall-submissions/${submission.id}/file`} rel="noreferrer" target="_blank">
-                    PDF 열기
+                    첨부 열기
                   </a>
                 ) : null}
               </div>

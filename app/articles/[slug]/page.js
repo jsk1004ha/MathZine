@@ -4,7 +4,7 @@ import { HallSubmissionForm } from "@/components/hall-submission-form";
 import { LikeButton } from "@/components/like-button";
 import { ViewTracker } from "@/components/view-tracker";
 import { canPreviewArticle, getCurrentUser } from "@/lib/auth";
-import { getArticleBySlug, listArticles, listCommentsForArticle } from "@/lib/content";
+import { getArticleBySlug, getArticlePageBundle } from "@/lib/content";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +28,16 @@ export async function generateMetadata({ params }) {
 
   return {
     title: `${article.title} | MathZine`,
-    description: article.deck
+    description: article.deck,
+    alternates: {
+      canonical: `/articles/${article.slug}`
+    },
+    openGraph: {
+      title: article.title,
+      description: article.deck,
+      type: "article",
+      url: `/articles/${article.slug}`
+    }
   };
 }
 
@@ -62,10 +71,10 @@ export default async function ArticlePage({ params }) {
     );
   }
 
-  const [comments, allArticles] = await Promise.all([listCommentsForArticle(slug), listArticles()]);
-
+  const bundle = await getArticlePageBundle(slug, { includeUnpublished: isPreview, viewer: user });
+  const comments = bundle?.comments ?? [];
+  const related = bundle?.related ?? [];
   const liked = user ? article.likeUserIds.includes(user.id) : false;
-  const related = allArticles.filter((entry) => entry.slug !== article.slug).slice(0, 4);
 
   return (
     <div className="article-layout">
@@ -93,8 +102,8 @@ export default async function ArticlePage({ params }) {
         </div>
 
         <div className="article-body-grid">
-          <div className="article-body article-body-full">
-            <ArticleRenderer article={article} />
+          <div className="article-body article-body-full editorial-article-body">
+            <ArticleRenderer article={article} className="editorial-columns" />
           </div>
         </div>
       </article>
@@ -118,7 +127,7 @@ export default async function ArticlePage({ params }) {
         </div>
 
         <div className="metric-card">
-          <p className="eyebrow">다른 볼거리</p>
+            <p className="eyebrow">다른 볼거리</p>
           <div className="related-story-list">
             {related.map((entry) => (
               <a href={`/articles/${entry.slug}`} key={entry.slug}>

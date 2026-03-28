@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { parseApiError } from "@/lib/api-client";
 
 export function BoardComposer({ canPost, canCreateNotice }) {
   const router = useRouter();
@@ -37,7 +38,7 @@ export function BoardComposer({ canPost, canCreateNotice }) {
       const payload = await response.json();
 
       if (!response.ok) {
-        throw new Error(payload.error || "게시글 등록에 실패했습니다.");
+        throw new Error(parseApiError(payload, "게시글 등록에 실패했습니다."));
       }
 
       setForm({
@@ -46,6 +47,7 @@ export function BoardComposer({ canPost, canCreateNotice }) {
         body: "",
         kind: "discussion"
       });
+      setMessage("게시글을 올렸습니다.");
       router.refresh();
     } catch (error) {
       setMessage(error.message);
@@ -86,7 +88,7 @@ export function BoardComposer({ canPost, canCreateNotice }) {
         <button className="primary-button" disabled={pending} type="submit">
           {pending ? "등록 중..." : "게시판에 올리기"}
         </button>
-        {message ? <p className="error-note">{message}</p> : null}
+        {message ? <p className={message.includes("올렸") ? "status-note" : "error-note"}>{message}</p> : null}
       </div>
     </form>
   );

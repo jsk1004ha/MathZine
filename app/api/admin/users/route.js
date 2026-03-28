@@ -1,14 +1,15 @@
-import { NextResponse } from "next/server";
 import { canManageAdmin, createAdminManagedUser, getUserFromRequest } from "@/lib/auth";
-import { assertSameOrigin, sanitizeText } from "@/lib/security";
+import { jsonError, jsonSuccess } from "@/lib/api";
+import { assertStateChangeAllowed, logAuditEvent } from "@/lib/ops";
+import { sanitizeText, withErrorCode } from "@/lib/security";
 
 export async function POST(request) {
   try {
-    assertSameOrigin(request);
+    await assertStateChangeAllowed(request, "admin.users.create", { limit: 20, windowMs: 60 * 60_000 });
     const user = await getUserFromRequest(request);
 
     if (!canManageAdmin(user)) {
-      return NextResponse.json({ error: "어드민 권한이 필요합니다." }, { status: 403 });
+      throw withErrorCode(new Error("어드민 권한이 필요합니다."), "FORBIDDEN", 403);
     }
 
     const body = await request.json();
@@ -23,8 +24,9 @@ export async function POST(request) {
       generation: Number(body.generation ?? 0)
     });
 
-    return NextResponse.json({ ok: true, user: createdUser });
+    await logAuditEvent("admin.user_created", { actorUserId: user.id, targetUserId: createdUser.id, role: createdUser.role });
+    return jsonSuccess({ user: createdUser }, { status: 201 });
   } catch (error) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
+    return jsonError(error, { code: "ADMIN_USER_CREATE_FAILED" });
   }
 }

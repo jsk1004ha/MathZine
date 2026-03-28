@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { parseApiError } from "@/lib/api-client";
 
 export function CommentForm({ slug, canComment }) {
   const router = useRouter();
@@ -32,10 +33,11 @@ export function CommentForm({ slug, canComment }) {
       const payload = await response.json();
 
       if (!response.ok) {
-        throw new Error(payload.error || "댓글 등록에 실패했습니다.");
+        throw new Error(parseApiError(payload, "댓글 등록에 실패했습니다."));
       }
 
       setBody("");
+      setMessage("댓글을 남겼습니다.");
       router.refresh();
     } catch (error) {
       setMessage(error.message);
@@ -57,7 +59,7 @@ export function CommentForm({ slug, canComment }) {
         <button className="primary-button" disabled={pending} type="submit">
           {pending ? "등록 중..." : "댓글 남기기"}
         </button>
-        {message ? <p className="inline-note">{message}</p> : null}
+        {message ? <p className={message.includes("남겼") ? "status-note" : "error-note"}>{message}</p> : null}
       </div>
     </form>
   );

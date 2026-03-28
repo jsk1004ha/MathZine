@@ -125,6 +125,35 @@ export default async function HomePage({ searchParams }) {
         </Link>
       </section>
 
+      <section className="section-panel">
+        <div className="section-heading">
+          <p className="eyebrow">처음 오셨다면</p>
+          <span>권한별 사용 안내</span>
+        </div>
+        <div className="archive-grid">
+          <article className="archive-card">
+            <p className="story-tag">일반 방문자</p>
+            <h3>기사와 호별 아카이브 읽기</h3>
+            <p>로그인 없이 기사, 호별 보기, 명예의 전당 랭킹을 둘러볼 수 있습니다.</p>
+          </article>
+          <article className="archive-card">
+            <p className="story-tag">회원</p>
+            <h3>댓글, 게시판, 풀이 제출</h3>
+            <p>리로스쿨 인증 후 의견 작성, 좋아요, 문제 풀이 제출에 참여할 수 있습니다.</p>
+          </article>
+          <article className="archive-card">
+            <p className="story-tag">기자</p>
+            <h3>기사 작성과 제출</h3>
+            <p>스튜디오에서 기사를 작성해 어드민 검토 대기 호수로 올립니다.</p>
+          </article>
+          <article className="archive-card">
+            <p className="story-tag">교사 / 어드민</p>
+            <h3>운영과 검토</h3>
+            <p>호수 공개, 계정 관리, 명예의 전당 채점과 운영 기록을 관리합니다.</p>
+          </article>
+        </div>
+      </section>
+
       <section className="news-columns">
         <div className="section-panel">
           <div className="section-heading">

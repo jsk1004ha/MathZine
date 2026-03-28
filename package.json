@@ -5,13 +5,22 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "lint": "eslint . --max-warnings=0",
+    "test": "node scripts/smoke-test.cjs",
+    "typecheck": "node scripts/typecheck.cjs",
+    "check": "npm run lint && npm run test"
   },
   "dependencies": {
     "better-sqlite3": "^12.8.0",
     "next": "16.2.1",
-    "pdfkit": "^0.18.0",
+    "playwright-core": "^1.58.2",
     "react": "19.2.4",
     "react-dom": "19.2.4"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.1.0",
+    "globals": "^17.4.0"
   }
 }

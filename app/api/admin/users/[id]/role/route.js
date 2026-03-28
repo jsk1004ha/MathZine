@@ -1,22 +1,23 @@
-import { NextResponse } from "next/server";
 import { canManageAdmin, getUserFromRequest, updateUserRole } from "@/lib/auth";
-import { assertSameOrigin, sanitizeText } from "@/lib/security";
+import { jsonError, jsonSuccess } from "@/lib/api";
+import { assertStateChangeAllowed, logAuditEvent } from "@/lib/ops";
+import { sanitizeText, withErrorCode } from "@/lib/security";
 
 export async function PATCH(request, { params }) {
   try {
-    assertSameOrigin(request);
+    await assertStateChangeAllowed(request, "admin.users.role", { limit: 30, windowMs: 60 * 60_000 });
     const user = await getUserFromRequest(request);
 
     if (!canManageAdmin(user)) {
-      return NextResponse.json({ error: "어드민 권한이 필요합니다." }, { status: 403 });
+      throw withErrorCode(new Error("어드민 권한이 필요합니다."), "FORBIDDEN", 403);
     }
 
     const { id } = await params;
     const body = await request.json();
     const updatedUser = await updateUserRole(id, sanitizeText(body.role, { maxLength: 20 }));
-    return NextResponse.json({ ok: true, user: updatedUser });
+    await logAuditEvent("admin.user_role_updated", { actorUserId: user.id, targetUserId: id, role: updatedUser.role });
+    return jsonSuccess({ user: updatedUser });
   } catch (error) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
+    return jsonError(error, { code: "ADMIN_USER_ROLE_FAILED" });
   }
 }
-

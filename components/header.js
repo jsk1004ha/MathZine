@@ -36,7 +36,7 @@ export function Header({ user }) {
           {user?.role === "admin" ? <Link href="/admin">어드민</Link> : null}
           {!user ? <Link href="/login">로그인</Link> : null}
         </div>
-        <form action="/" className="header-search">
+        <form action="/search" className="header-search">
           <input name="q" placeholder="기사 검색" type="search" />
           <button aria-label="검색" title="검색" type="submit">
             <svg aria-hidden="true" fill="none" height="18" viewBox="0 0 24 24" width="18">

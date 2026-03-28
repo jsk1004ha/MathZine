@@ -261,13 +261,13 @@ function BlockRenderer({ block, numberMap }) {
   }
 }
 
-export function ArticleRenderer({ article, document }) {
+export function ArticleRenderer({ article, className = "", document }) {
   const normalized = normalizeArticleDocument(document ? { document } : article);
   const numberMap = getReferenceNumberMap(normalized);
   const references = collectReferencedEntries(normalized);
 
   return (
-    <div className="article-renderer">
+    <div className={`article-renderer ${className}`.trim()}>
       {normalized.blocks.map((block) => (
         <BlockRenderer block={block} key={block.id} numberMap={numberMap} />
       ))}

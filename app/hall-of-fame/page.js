@@ -58,14 +58,16 @@ export default async function HallOfFamePage() {
         <section className="section-panel">
           <div className="section-heading">
             <p className="eyebrow">최근 제출</p>
-            <span>{user ? "기사 상세에서 PDF 제출 가능" : "로그인 후 기사 상세에서 PDF 제출 가능"}</span>
+            <span>{user ? "기사 상세에서 PDF, 사진, 노트 제출 가능" : "로그인 후 기사 상세에서 풀이 제출 가능"}</span>
           </div>
           <div className="board-list">
             {submissions.slice(0, 8).map((submission) => (
               <article className="board-card" key={submission.id}>
                 <p className="story-tag">{submission.problem?.title ?? "문제"}</p>
                 <h2>{submission.nickname}</h2>
-                <p>{submission.originalFileName}</p>
+                <p>
+                  {submission.originalFileName} · {submission.fileKind === "image" ? "이미지" : "PDF"}
+                </p>
                 <span>
                   {submission.status} · {submission.awardedPoints} pts
                 </span>

@@ -1,21 +1,22 @@
-import { NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/auth";
 import { addComment, listCommentsForArticle } from "@/lib/content";
-import { assertSameOrigin, sanitizeText } from "@/lib/security";
+import { jsonError, jsonSuccess, noStoreHeaders } from "@/lib/api";
+import { assertStateChangeAllowed, logAuditEvent } from "@/lib/ops";
+import { sanitizeText, withErrorCode } from "@/lib/security";
 
 export async function GET(_request, { params }) {
   const { slug } = await params;
   const comments = await listCommentsForArticle(slug);
-  return NextResponse.json({ comments });
+  return jsonSuccess({ comments }, { headers: noStoreHeaders() });
 }
 
 export async function POST(request, { params }) {
   try {
-    assertSameOrigin(request);
+    await assertStateChangeAllowed(request, "comments.create", { limit: 20, windowMs: 60 * 60_000 });
     const user = await getUserFromRequest(request);
 
     if (!user) {
-      return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
+      throw withErrorCode(new Error("로그인이 필요합니다."), "AUTH_REQUIRED", 401);
     }
 
     const { slug } = await params;
@@ -25,9 +26,9 @@ export async function POST(request, { params }) {
       user,
       sanitizeText(body.body, { maxLength: 500, multiline: true })
     );
-    return NextResponse.json({ ok: true, comment });
+    await logAuditEvent("comment.created", { userId: user.id, articleSlug: slug, commentId: comment.id });
+    return jsonSuccess({ comment }, { status: 201 });
   } catch (error) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
+    return jsonError(error, { code: "COMMENT_CREATE_FAILED" });
   }
 }
-

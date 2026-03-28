@@ -1,27 +1,39 @@
-import { NextResponse } from "next/server";
 import { canPostBoard, getUserFromRequest } from "@/lib/auth";
 import { createBoardPost, listBoardPosts } from "@/lib/content";
-import { assertSameOrigin } from "@/lib/security";
+import { jsonError, jsonSuccess, paginateItems, parsePagination } from "@/lib/api";
+import { assertStateChangeAllowed, logAuditEvent } from "@/lib/ops";
+import { withErrorCode } from "@/lib/security";
 
-export async function GET() {
-  const posts = await listBoardPosts();
-  return NextResponse.json({ posts });
+export async function GET(request) {
+  try {
+    const searchParams = request.nextUrl.searchParams;
+    const pagination = parsePagination(searchParams, { pageSize: 10 });
+    const posts = await listBoardPosts({
+      searchTerm: searchParams.get("q") ?? "",
+      kind: searchParams.get("kind") ?? "",
+      sort: searchParams.get("sort") ?? "latest"
+    });
+    const paged = paginateItems(posts, pagination);
+    return jsonSuccess({ posts: paged.items }, { meta: paged.meta });
+  } catch (error) {
+    return jsonError(error, { code: "BOARD_LIST_FAILED" });
+  }
 }
 
 export async function POST(request) {
   try {
-    assertSameOrigin(request);
+    await assertStateChangeAllowed(request, "board.create", { limit: 12, windowMs: 60 * 60_000 });
     const user = await getUserFromRequest(request);
 
     if (!canPostBoard(user)) {
-      return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
+      throw withErrorCode(new Error("로그인이 필요합니다."), "AUTH_REQUIRED", 401);
     }
 
     const body = await request.json();
     const post = await createBoardPost(body, user);
-    return NextResponse.json({ ok: true, post });
+    await logAuditEvent("board.created", { userId: user.id, postId: post.id, kind: post.kind });
+    return jsonSuccess({ post }, { status: 201 });
   } catch (error) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
+    return jsonError(error, { code: "BOARD_CREATE_FAILED" });
   }
 }
-

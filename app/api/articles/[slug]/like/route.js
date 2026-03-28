@@ -1,20 +1,24 @@
-import { NextResponse } from "next/server";
-import { getUserFromRequest } from "@/lib/auth";
+import { assertUserNotBanned, getUserFromRequest } from "@/lib/auth";
 import { toggleArticleLike } from "@/lib/content";
+import { jsonError, jsonSuccess } from "@/lib/api";
+import { assertStateChangeAllowed, logAuditEvent } from "@/lib/ops";
+import { withErrorCode } from "@/lib/security";
 
 export async function POST(request, { params }) {
-  const user = await getUserFromRequest(request);
-
-  if (!user) {
-    return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
-  }
-
   try {
+    await assertStateChangeAllowed(request, "articles.like", { limit: 60, windowMs: 60 * 60_000 });
+    const user = await getUserFromRequest(request);
+
+    if (!user) {
+      throw withErrorCode(new Error("로그인이 필요합니다."), "AUTH_REQUIRED", 401);
+    }
+
+    assertUserNotBanned(user);
     const { slug } = await params;
     const payload = await toggleArticleLike(slug, user.id);
-    return NextResponse.json(payload);
+    await logAuditEvent("article.like_toggled", { userId: user.id, articleSlug: slug, liked: payload.liked });
+    return jsonSuccess(payload);
   } catch (error) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
+    return jsonError(error, { code: "ARTICLE_LIKE_FAILED" });
   }
 }
-

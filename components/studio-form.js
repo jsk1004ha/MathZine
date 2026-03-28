@@ -1,7 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { parseApiError } from "@/lib/api-client";
 import { ArticleRenderer } from "@/components/article-renderer";
 import { InlineRichTextField } from "@/components/inline-rich-text-field";
 import {
@@ -26,6 +27,7 @@ const blockTypeOptions = [
   { value: "video", label: "영상" },
   { value: "link", label: "링크" }
 ];
+const STUDIO_DRAFT_KEY = "mathzine-studio-draft-v1";
 
 function getInitialArticle() {
   return {
@@ -37,6 +39,43 @@ function getInitialArticle() {
     readTime: "5 min read",
     document: createEmptyArticleDocument()
   };
+}
+
+function hasMeaningfulDraft(article) {
+  const document = article?.document ?? {};
+  const blocks = Array.isArray(document.blocks) ? document.blocks : [];
+  const references = Array.isArray(document.references) ? document.references : [];
+
+  return Boolean(
+    article?.title ||
+      article?.deck ||
+      article?.issue ||
+      blocks.some((block) =>
+        ["text", "body", "statement", "code", "src", "url", "caption", "title"].some((field) => String(block?.[field] ?? "").trim()) ||
+        Object.values(block?.fields ?? {}).some((value) => String(value ?? "").trim())
+      ) ||
+      references.some((reference) => reference.title || reference.source || reference.url)
+  );
+}
+
+function readStoredDraft() {
+  try {
+    const raw = window.localStorage.getItem(STUDIO_DRAFT_KEY);
+
+    if (!raw) {
+      return null;
+    }
+
+    const parsed = JSON.parse(raw);
+
+    if (!parsed?.article) {
+      return null;
+    }
+
+    return parsed;
+  } catch {
+    return null;
+  }
 }
 
 function getSelectedValues(event) {
@@ -87,10 +126,10 @@ function MediaUploader({ accept, block, kind, onUpdate }) {
       const payload = await response.json();
 
       if (!response.ok) {
-        throw new Error(payload.error || "업로드에 실패했습니다.");
+        throw new Error(parseApiError(payload, "업로드에 실패했습니다."));
       }
 
-      onUpdate("src", payload.url);
+      onUpdate("src", payload.data.url);
       setMessage("업로드가 완료되었습니다.");
     } catch (error) {
       setMessage(error.message);
@@ -313,6 +352,96 @@ export function StudioForm() {
   const [article, setArticle] = useState(getInitialArticle);
   const [articleMessage, setArticleMessage] = useState("");
   const [articlePending, setArticlePending] = useState(false);
+  const [draftMessage, setDraftMessage] = useState("");
+  const [draftReady, setDraftReady] = useState(false);
+  const [lastSavedAt, setLastSavedAt] = useState("");
+  const [isDirty, setIsDirty] = useState(false);
+  const isRestoringDraftRef = useRef(true);
+
+  useEffect(() => {
+    const storedDraft = readStoredDraft();
+
+    if (storedDraft?.article) {
+      setArticle(storedDraft.article);
+      setLastSavedAt(storedDraft.savedAt || "");
+      setDraftMessage(storedDraft.savedAt ? `임시저장본을 불러왔습니다. 마지막 저장 ${new Date(storedDraft.savedAt).toLocaleString("ko-KR")}` : "임시저장본을 불러왔습니다.");
+    }
+
+    isRestoringDraftRef.current = false;
+    setDraftReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!draftReady) {
+      return undefined;
+    }
+
+    if (!hasMeaningfulDraft(article)) {
+      window.localStorage.removeItem(STUDIO_DRAFT_KEY);
+      setLastSavedAt("");
+      setIsDirty(false);
+      return undefined;
+    }
+
+    if (isRestoringDraftRef.current) {
+      return undefined;
+    }
+
+    setIsDirty(true);
+    const timer = window.setTimeout(() => {
+      const savedAt = new Date().toISOString();
+      window.localStorage.setItem(STUDIO_DRAFT_KEY, JSON.stringify({ savedAt, article }));
+      setLastSavedAt(savedAt);
+      setDraftMessage(`임시저장됨 · ${new Date(savedAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })}`);
+      setIsDirty(false);
+    }, 900);
+
+    return () => window.clearTimeout(timer);
+  }, [article, draftReady]);
+
+  useEffect(() => {
+    if (!isDirty) {
+      return undefined;
+    }
+
+    function handleBeforeUnload(event) {
+      event.preventDefault();
+      event.returnValue = "";
+    }
+
+    function handleDocumentClick(event) {
+      const anchor = event.target instanceof Element ? event.target.closest("a[href]") : null;
+
+      if (!anchor) {
+        return;
+      }
+
+      const href = anchor.getAttribute("href");
+
+      if (!href || href.startsWith("#") || anchor.target === "_blank" || anchor.hasAttribute("download")) {
+        return;
+      }
+
+      const destination = new URL(anchor.href, window.location.href);
+
+      if (destination.origin !== window.location.origin) {
+        return;
+      }
+
+      if (!window.confirm("임시저장 전인 변경 내용이 있습니다. 페이지를 떠날까요?")) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    }
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    document.addEventListener("click", handleDocumentClick, true);
+
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      document.removeEventListener("click", handleDocumentClick, true);
+    };
+  }, [isDirty]);
 
   function updateArticleField(field, value) {
     setArticle((prev) => ({ ...prev, [field]: value }));
@@ -442,10 +571,14 @@ export function StudioForm() {
       const payload = await response.json();
 
       if (!response.ok) {
-        throw new Error(payload.error || "기사 저장에 실패했습니다.");
+        throw new Error(parseApiError(payload, "기사 저장에 실패했습니다."));
       }
 
+      window.localStorage.removeItem(STUDIO_DRAFT_KEY);
       setArticle(getInitialArticle());
+      setLastSavedAt("");
+      setDraftMessage("임시저장본을 비우고 새 원고 상태로 초기화했습니다.");
+      setIsDirty(false);
       setArticleMessage("기사가 저장되었고, 현재는 편집부 검토 대기 상태입니다.");
       router.refresh();
     } catch (error) {
@@ -455,6 +588,14 @@ export function StudioForm() {
     }
   }
 
+  function clearDraft() {
+    window.localStorage.removeItem(STUDIO_DRAFT_KEY);
+    setArticle(getInitialArticle());
+    setDraftMessage("임시저장본을 지웠습니다.");
+    setLastSavedAt("");
+    setIsDirty(false);
+  }
+
   return (
     <form className="studio-card" onSubmit={submitArticle}>
       <div className="studio-card-header">
@@ -462,6 +603,12 @@ export function StudioForm() {
         <h2>새 기사 제출</h2>
       </div>
       <p className="panel-note">제목, 데크, 호수를 먼저 정리한 뒤 블록을 쌓으면 지면 흐름이 훨씬 안정적으로 잡힙니다.</p>
+      <div className="draft-status-row">
+        <p className="inline-note">{draftMessage || (lastSavedAt ? `마지막 임시저장 ${new Date(lastSavedAt).toLocaleString("ko-KR")}` : "작성 내용은 브라우저에 임시저장됩니다.")}</p>
+        <button className="ghost-button" onClick={clearDraft} type="button">
+          임시저장 비우기
+        </button>
+      </div>
 
       <InlineRichTextField label="제목" multiline={false} onChange={(value) => updateArticleField("title", value)} value={article.title} />
 
@@ -533,8 +680,8 @@ export function StudioForm() {
             <p className="eyebrow">Live Preview</p>
             <span>{article.document.blocks.length} blocks</span>
           </div>
-          <div className="editor-preview-surface">
-            <ArticleRenderer document={article.document} />
+          <div className="editor-preview-surface editorial-preview-surface">
+            <ArticleRenderer className="editorial-columns preview-magazine" document={article.document} />
           </div>
         </aside>
       </div>
@@ -587,6 +734,7 @@ export function StudioForm() {
         <button className="primary-button wide-button" disabled={articlePending} type="submit">
           {articlePending ? "제출 중..." : "편집부에 제출"}
         </button>
+        {isDirty ? <p className="status-note">입력 중인 변경 사항을 저장 중입니다.</p> : null}
         {articleMessage ? <p className="status-note">{articleMessage}</p> : null}
       </div>
     </form>

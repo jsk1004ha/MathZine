@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { parseApiError } from "@/lib/api-client";
 
 export function AuthForm({ mode }) {
   const router = useRouter();
@@ -15,9 +16,22 @@ export function AuthForm({ mode }) {
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState("");
   const isSignup = mode === "signup";
+  const validation = {
+    riroId: form.riroId.trim().length >= 4,
+    password: form.password.length >= 8,
+    nickname: !isSignup || form.nickname.trim().length >= 2,
+    terms: !isSignup || form.acceptedTerms
+  };
+  const canSubmit = Object.values(validation).every(Boolean);
 
   async function handleSubmit(event) {
     event.preventDefault();
+
+    if (!canSubmit) {
+      setMessage("입력 항목을 다시 확인해 주세요.");
+      return;
+    }
+
     setPending(true);
     setMessage("");
 
@@ -33,7 +47,7 @@ export function AuthForm({ mode }) {
       const payload = await response.json();
 
       if (!response.ok) {
-        throw new Error(payload.error || "인증에 실패했습니다.");
+        throw new Error(parseApiError(payload, "인증에 실패했습니다."));
       }
 
       router.push(isSignup ? "/studio" : "/");
@@ -58,6 +72,7 @@ export function AuthForm({ mode }) {
           type="text"
           value={form.riroId}
         />
+        <small className="inline-note">학번 또는 리로스쿨 로그인 ID를 입력합니다.</small>
       </label>
       <label>
         <span>비밀번호</span>
@@ -70,6 +85,7 @@ export function AuthForm({ mode }) {
           type="password"
           value={form.password}
         />
+        <small className="inline-note">8자 이상 입력해 주세요.</small>
       </label>
       {isSignup ? (
         <label>
@@ -83,6 +99,7 @@ export function AuthForm({ mode }) {
             type="text"
             value={form.nickname}
           />
+          <small className="inline-note">2자 이상 24자 이하. 댓글과 랭킹에 표시됩니다.</small>
         </label>
       ) : null}
       <label className="check-row">
@@ -109,8 +126,11 @@ export function AuthForm({ mode }) {
       <button className="primary-button wide-button" disabled={pending} type="submit">
         {pending ? "인증 중..." : isSignup ? "리로스쿨 인증 후 가입" : "로그인"}
       </button>
-      {isSignup ? <p className="status-note">가입 후 바로 로그인할 수 있습니다.</p> : null}
-      {message ? <p className="error-note">{message}</p> : null}
+      {isSignup ? <p className="status-note">가입 후 바로 로그인되며, 기사 읽기는 로그인 없이도 가능합니다.</p> : null}
+      {!validation.riroId ? <p className="inline-note">로그인 ID를 조금 더 정확히 입력해 주세요.</p> : null}
+      {!validation.password ? <p className="inline-note">비밀번호는 8자 이상이어야 합니다.</p> : null}
+      {isSignup && !validation.nickname ? <p className="inline-note">닉네임은 2자 이상이어야 합니다.</p> : null}
+      {message ? <p className={message.includes("완료") ? "status-note" : "error-note"}>{message}</p> : null}
     </form>
   );
 }

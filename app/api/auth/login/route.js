@@ -1,10 +1,11 @@
-import { NextResponse } from "next/server";
 import { applySessionCookie, loginUser } from "@/lib/auth";
-import { assertSameOrigin, sanitizeText } from "@/lib/security";
+import { jsonError, jsonSuccess, noStoreHeaders } from "@/lib/api";
+import { assertStateChangeAllowed, logAuditEvent } from "@/lib/ops";
+import { sanitizeText } from "@/lib/security";
 
 export async function POST(request) {
   try {
-    assertSameOrigin(request);
+    await assertStateChangeAllowed(request, "auth.login", { limit: 10, windowMs: 10 * 60_000 });
     const body = await request.json();
     const { user, sessionToken, rememberMe } = await loginUser(
       sanitizeText(body.riroId, { maxLength: 40 }),
@@ -12,10 +13,15 @@ export async function POST(request) {
       { rememberMe: body.rememberMe }
     );
 
-    const response = NextResponse.json({ ok: true, user });
+    await logAuditEvent("auth.login", {
+      userId: user.id,
+      authProvider: user.authProvider,
+      role: user.role
+    });
+    const response = jsonSuccess({ user }, { headers: noStoreHeaders() });
     applySessionCookie(response, sessionToken, rememberMe);
     return response;
   } catch (error) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
+    return jsonError(error, { code: "AUTH_LOGIN_FAILED" });
   }
 }

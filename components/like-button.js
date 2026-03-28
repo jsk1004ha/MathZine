@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { parseApiError } from "@/lib/api-client";
 
 export function LikeButton({ slug, initialLikeCount, initialLiked, canInteract }) {
   const router = useRouter();
@@ -27,11 +28,12 @@ export function LikeButton({ slug, initialLikeCount, initialLiked, canInteract }
       const payload = await response.json();
 
       if (!response.ok) {
-        throw new Error(payload.error || "좋아요 처리에 실패했습니다.");
+        throw new Error(parseApiError(payload, "좋아요 처리에 실패했습니다."));
       }
 
-      setLiked(payload.liked);
-      setLikeCount(payload.likeCount);
+      setLiked(payload.data.liked);
+      setLikeCount(payload.data.likeCount);
+      setMessage(payload.data.liked ? "좋아요를 남겼습니다." : "좋아요를 취소했습니다.");
       router.refresh();
     } catch (error) {
       setMessage(error.message);
@@ -45,8 +47,7 @@ export function LikeButton({ slug, initialLikeCount, initialLiked, canInteract }
       <button className={`reaction-button ${liked ? "active" : ""}`} disabled={pending} onClick={handleLike} type="button">
         {liked ? "♥" : "♡"} {likeCount}
       </button>
-      {message ? <p className="inline-note">{message}</p> : null}
+      {message ? <p className={message.includes("좋아요") ? "status-note" : "error-note"}>{message}</p> : null}
     </div>
   );
 }
-

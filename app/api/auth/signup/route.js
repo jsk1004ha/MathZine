@@ -1,14 +1,15 @@
-import { NextResponse } from "next/server";
 import { applySessionCookie, signUpWithRiro } from "@/lib/auth";
-import { assertSameOrigin, sanitizeText } from "@/lib/security";
+import { jsonError, jsonSuccess, noStoreHeaders } from "@/lib/api";
+import { assertStateChangeAllowed, logAuditEvent } from "@/lib/ops";
+import { sanitizeText, withErrorCode } from "@/lib/security";
 
 export async function POST(request) {
   try {
-    assertSameOrigin(request);
+    await assertStateChangeAllowed(request, "auth.signup", { limit: 5, windowMs: 30 * 60_000 });
     const body = await request.json();
 
     if (!body.acceptedTerms) {
-      return NextResponse.json({ error: "약관 동의가 필요합니다." }, { status: 400 });
+      throw withErrorCode(new Error("약관 동의가 필요합니다."), "TERMS_REQUIRED", 400);
     }
 
     const { user, sessionToken, rememberMe } = await signUpWithRiro(
@@ -18,10 +19,15 @@ export async function POST(request) {
       { rememberMe: body.rememberMe }
     );
 
-    const response = NextResponse.json({ ok: true, user });
+    await logAuditEvent("auth.signup", {
+      userId: user.id,
+      authProvider: user.authProvider,
+      role: user.role
+    });
+    const response = jsonSuccess({ user }, { headers: noStoreHeaders() });
     applySessionCookie(response, sessionToken, rememberMe);
     return response;
   } catch (error) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
+    return jsonError(error, { code: "AUTH_SIGNUP_FAILED" });
   }
 }

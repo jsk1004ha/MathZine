@@ -1,24 +1,34 @@
 "use client";
 
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { parseApiError } from "@/lib/api-client";
+import { SolutionNote } from "@/components/solution-note";
 
 export function HallSubmissionForm({ problem, canSubmit }) {
   const router = useRouter();
+  const noteRef = useRef(null);
   const [file, setFile] = useState(null);
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState("");
 
   async function handleSubmit(event) {
     event.preventDefault();
+    const formElement = event.currentTarget;
 
     if (!canSubmit) {
       setMessage("풀이 제출은 로그인 후 가능합니다.");
       return;
     }
 
-    if (!file) {
-      setMessage("PDF 파일을 선택해 주세요.");
+    let submissionFile = file;
+
+    if (!submissionFile && noteRef.current?.hasInk()) {
+      submissionFile = await noteRef.current.exportFile();
+    }
+
+    if (!submissionFile) {
+      setMessage("PDF, 풀이 사진, 또는 온라인 노트 중 하나를 제출해 주세요.");
       return;
     }
 
@@ -28,7 +38,7 @@ export function HallSubmissionForm({ problem, canSubmit }) {
     try {
       const formData = new FormData();
       formData.append("problemId", problem.id);
-      formData.append("file", file);
+      formData.append("file", submissionFile);
 
       const response = await fetch("/api/hall-of-fame/submissions", {
         method: "POST",
@@ -38,11 +48,13 @@ export function HallSubmissionForm({ problem, canSubmit }) {
       const payload = await response.json();
 
       if (!response.ok) {
-        throw new Error(payload.error || "PDF 제출에 실패했습니다.");
+        throw new Error(parseApiError(payload, "풀이 제출에 실패했습니다."));
       }
 
       setFile(null);
-      event.currentTarget.reset();
+      formElement.reset();
+      noteRef.current?.clear();
+      setMessage("제출이 완료되었습니다.");
       router.refresh();
     } catch (error) {
       setMessage(error.message);
@@ -53,16 +65,17 @@ export function HallSubmissionForm({ problem, canSubmit }) {
 
   return (
     <form className="problem-submit-form" onSubmit={handleSubmit}>
-      <p className="panel-note">한 개의 PDF로 정리해서 제출하면 채점과 보관이 가장 깔끔합니다.</p>
+      <p className="panel-note">PDF, 풀이 사진, 또는 아래 온라인 노트 중 하나로 제출할 수 있습니다.</p>
       <label>
-        <span>PDF 풀이 업로드</span>
-        <input accept="application/pdf,.pdf" onChange={(event) => setFile(event.target.files?.[0] ?? null)} type="file" />
+        <span>파일 업로드</span>
+        <input accept="application/pdf,.pdf,image/*" onChange={(event) => setFile(event.target.files?.[0] ?? null)} type="file" />
       </label>
+      <SolutionNote ref={noteRef} />
       <div className="form-submit-row">
         <button className="primary-button" disabled={pending} type="submit">
-          {pending ? "업로드 중..." : "PDF 제출"}
+          {pending ? "제출 중..." : "풀이 제출"}
         </button>
-        {message ? <p className="error-note">{message}</p> : null}
+        {message ? <p className={message.includes("완료") ? "status-note" : "error-note"}>{message}</p> : null}
       </div>
     </form>
   );

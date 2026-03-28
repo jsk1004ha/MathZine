@@ -2,9 +2,24 @@ import "./globals.css";
 import { Header } from "@/components/header";
 import { getCurrentUser } from "@/lib/auth";
 
+const metadataBase = (() => {
+  try {
+    return new URL(process.env.APP_ORIGIN || "http://localhost:3000");
+  } catch {
+    return new URL("http://localhost:3000");
+  }
+})();
+
 export const metadata = {
   title: "MathZine",
-  description: "천수동의 수학 월간지"
+  description: "천수동의 수학 월간지",
+  metadataBase,
+  openGraph: {
+    title: "MathZine",
+    description: "천수동의 수학 월간지",
+    siteName: "MathZine",
+    type: "website"
+  }
 };
 
 export default async function RootLayout({ children }) {

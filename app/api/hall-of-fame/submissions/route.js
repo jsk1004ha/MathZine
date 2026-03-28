@@ -1,19 +1,22 @@
-import { NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/auth";
 import { createHallSubmission, listHallSubmissions } from "@/lib/content";
-import { savePdfUpload } from "@/lib/files";
+import { saveSubmissionUpload } from "@/lib/files";
+import { jsonError, jsonSuccess, noStoreHeaders } from "@/lib/api";
+import { assertStateChangeAllowed, logAuditEvent } from "@/lib/ops";
+import { withErrorCode } from "@/lib/security";
 
 export async function GET() {
   const submissions = await listHallSubmissions();
-  return NextResponse.json({ submissions });
+  return jsonSuccess({ submissions }, { headers: noStoreHeaders() });
 }
 
 export async function POST(request) {
   try {
+    await assertStateChangeAllowed(request, "hall.submission", { limit: 12, windowMs: 24 * 60 * 60_000 });
     const user = await getUserFromRequest(request);
 
     if (!user) {
-      return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
+      throw withErrorCode(new Error("로그인이 필요합니다."), "AUTH_REQUIRED", 401);
     }
 
     const formData = await request.formData();
@@ -21,14 +24,18 @@ export async function POST(request) {
     const file = formData.get("file");
 
     if (!(file instanceof File)) {
-      return NextResponse.json({ error: "PDF 파일을 업로드해 주세요." }, { status: 400 });
+      throw withErrorCode(new Error("제출 파일을 업로드해 주세요."), "FILE_REQUIRED", 400);
     }
 
-    if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
-      return NextResponse.json({ error: "PDF 형식만 업로드할 수 있습니다." }, { status: 400 });
+    const lowerName = file.name.toLowerCase();
+    const isPdf = file.type === "application/pdf" || lowerName.endsWith(".pdf");
+    const isImage = file.type.startsWith("image/") || [".png", ".jpg", ".jpeg", ".webp"].some((extension) => lowerName.endsWith(extension));
+
+    if (!isPdf && !isImage) {
+      throw withErrorCode(new Error("PDF 또는 이미지 형식만 업로드할 수 있습니다."), "FILE_TYPE_INVALID", 400);
     }
 
-    const upload = await savePdfUpload(file);
+    const upload = await saveSubmissionUpload(file);
     const submission = await createHallSubmission(
       {
         problemId,
@@ -37,8 +44,14 @@ export async function POST(request) {
       user
     );
 
-    return NextResponse.json({ ok: true, submission });
+    await logAuditEvent("hall.submission.created", {
+      userId: user.id,
+      submissionId: submission.id,
+      problemId: submission.problemId,
+      fileKind: submission.fileKind
+    });
+    return jsonSuccess({ submission }, { status: 201 });
   } catch (error) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
+    return jsonError(error, { code: "HALL_SUBMISSION_FAILED" });
   }
 }

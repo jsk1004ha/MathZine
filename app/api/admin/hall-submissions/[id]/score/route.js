@@ -1,15 +1,16 @@
-import { NextResponse } from "next/server";
 import { canManageAdmin, getUserFromRequest } from "@/lib/auth";
 import { scoreHallSubmission } from "@/lib/content";
-import { assertSameOrigin, sanitizeText } from "@/lib/security";
+import { jsonError, jsonSuccess } from "@/lib/api";
+import { assertStateChangeAllowed, logAuditEvent } from "@/lib/ops";
+import { sanitizeText, withErrorCode } from "@/lib/security";
 
 export async function PATCH(request, { params }) {
   try {
-    assertSameOrigin(request);
+    await assertStateChangeAllowed(request, "admin.hall_submission.score", { limit: 50, windowMs: 60 * 60_000 });
     const user = await getUserFromRequest(request);
 
     if (!canManageAdmin(user)) {
-      return NextResponse.json({ error: "어드민 권한이 필요합니다." }, { status: 403 });
+      throw withErrorCode(new Error("어드민 권한이 필요합니다."), "FORBIDDEN", 403);
     }
 
     const { id } = await params;
@@ -19,8 +20,9 @@ export async function PATCH(request, { params }) {
       Number(body.points ?? 0),
       sanitizeText(body.status, { maxLength: 20 })
     );
-    return NextResponse.json({ ok: true, submission });
+    await logAuditEvent("admin.hall_submission_scored", { actorUserId: user.id, submissionId: id, status: submission.status, points: submission.awardedPoints });
+    return jsonSuccess({ submission });
   } catch (error) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
+    return jsonError(error, { code: "ADMIN_HALL_SCORE_FAILED" });
   }
 }
