@@ -103,7 +103,7 @@ export default async function ArticlePage({ params }) {
 
         <div className="article-body-grid">
           <div className="article-body article-body-full editorial-article-body">
-            <ArticleRenderer article={article} className="editorial-columns" />
+            <ArticleRenderer article={article} />
           </div>
         </div>
       </article>

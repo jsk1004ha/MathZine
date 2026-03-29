@@ -82,6 +82,75 @@ function getSelectedValues(event) {
   return Array.from(event.target.selectedOptions, (option) => option.value);
 }
 
+function isFilled(value) {
+  return String(value ?? "").trim().length > 0;
+}
+
+function getSubmissionIssues(article) {
+  const issues = [];
+  const blocks = article?.document?.blocks ?? [];
+
+  if (!isFilled(article?.title)) {
+    issues.push({ id: "title", targetId: "studio-field-title", message: "제목을 입력해 주세요." });
+  }
+
+  if (!isFilled(article?.deck)) {
+    issues.push({ id: "deck", targetId: "studio-field-deck", message: "데크를 입력해 주세요." });
+  }
+
+  if (!isFilled(article?.issue)) {
+    issues.push({ id: "issue", targetId: "studio-field-issue", message: "호수를 입력해 주세요." });
+  }
+
+  if (!isFilled(article?.readTime)) {
+    issues.push({ id: "readTime", targetId: "studio-field-readTime", message: "읽기 시간을 입력해 주세요." });
+  }
+
+  if (!blocks.length) {
+    issues.push({ id: "blocks-empty", targetId: "studio-block-toolbar", message: "본문 블록을 하나 이상 추가해 주세요." });
+    return issues;
+  }
+
+  blocks.forEach((block, index) => {
+    const targetId = `studio-block-${block.id}`;
+    const label = `${index + 1}번 ${blockTypeOptions.find((option) => option.value === block.type)?.label ?? "블록"}`;
+
+    if (block.type === "paragraph" && !isFilled(block.text)) {
+      issues.push({ id: `${block.id}-text`, targetId, message: `${label} 내용이 비어 있습니다.` });
+    }
+
+    if (block.type === "heading" && !isFilled(block.text)) {
+      issues.push({ id: `${block.id}-heading`, targetId, message: `${label} 제목을 입력해 주세요.` });
+    }
+
+    if (block.type === "callout" && !isFilled(block.body)) {
+      issues.push({ id: `${block.id}-callout`, targetId, message: `${label} 설명을 입력해 주세요.` });
+    }
+
+    if (block.type === "theorem" && !isFilled(block.statement)) {
+      issues.push({ id: `${block.id}-theorem`, targetId, message: `${label} 정리 내용을 입력해 주세요.` });
+    }
+
+    if (block.type === "proof" && !isFilled(block.body)) {
+      issues.push({ id: `${block.id}-proof`, targetId, message: `${label} 증명 내용을 입력해 주세요.` });
+    }
+
+    if (block.type === "code" && !isFilled(block.code)) {
+      issues.push({ id: `${block.id}-code`, targetId, message: `${label} 코드를 입력해 주세요.` });
+    }
+
+    if ((block.type === "image" || block.type === "video") && !isFilled(block.src)) {
+      issues.push({ id: `${block.id}-media`, targetId, message: `${label} 파일 또는 URL을 넣어 주세요.` });
+    }
+
+    if (block.type === "link" && (!isFilled(block.title) || !isFilled(block.url))) {
+      issues.push({ id: `${block.id}-link`, targetId, message: `${label} 제목과 URL을 모두 입력해 주세요.` });
+    }
+  });
+
+  return issues;
+}
+
 function BlockReferenceSelector({ block, references, onChange }) {
   if (!references.length) {
     return <p className="inline-note">참고문헌을 추가하면 블록에 각주를 연결할 수 있습니다.</p>;
@@ -166,7 +235,7 @@ function BlockEditor({
   onUpdate
 }) {
   return (
-    <article className="block-editor">
+    <article className="block-editor" id={`studio-block-${block.id}`}>
       <div className="block-editor-header">
         <div>
           <p className="eyebrow">Block {String(index + 1).padStart(2, "0")}</p>
@@ -356,7 +425,10 @@ export function StudioForm() {
   const [draftReady, setDraftReady] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState("");
   const [isDirty, setIsDirty] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [showValidationGuide, setShowValidationGuide] = useState(false);
   const isRestoringDraftRef = useRef(true);
+  const submissionIssues = getSubmissionIssues(article);
 
   useEffect(() => {
     const storedDraft = readStoredDraft();
@@ -442,6 +514,21 @@ export function StudioForm() {
       document.removeEventListener("click", handleDocumentClick, true);
     };
   }, [isDirty]);
+
+  useEffect(() => {
+    if (!previewOpen) {
+      return undefined;
+    }
+
+    function handleKeyDown(event) {
+      if (event.key === "Escape") {
+        setPreviewOpen(false);
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [previewOpen]);
 
   function updateArticleField(field, value) {
     setArticle((prev) => ({ ...prev, [field]: value }));
@@ -556,8 +643,15 @@ export function StudioForm() {
 
   async function submitArticle(event) {
     event.preventDefault();
+    setShowValidationGuide(true);
     setArticlePending(true);
     setArticleMessage("");
+
+    if (submissionIssues.length) {
+      setArticleMessage("부족한 항목을 먼저 채워 주세요.");
+      setArticlePending(false);
+      return;
+    }
 
     try {
       const response = await fetch("/api/articles", {
@@ -596,8 +690,43 @@ export function StudioForm() {
     setIsDirty(false);
   }
 
+  function scrollToTarget(targetId) {
+    const target = document.getElementById(targetId);
+
+    if (!target) {
+      return;
+    }
+
+    target.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
   return (
-    <form className="studio-card" onSubmit={submitArticle}>
+    <>
+      {previewOpen ? (
+        <div className="preview-modal-backdrop" onClick={() => setPreviewOpen(false)} role="presentation">
+          <div
+            aria-label="기사 미리보기"
+            className="preview-modal"
+            onClick={(event) => event.stopPropagation()}
+            role="dialog"
+          >
+            <div className="preview-modal-header">
+              <div className="section-heading">
+                <p className="eyebrow">Popup Preview</p>
+                <span>{article.document.blocks.length} blocks</span>
+              </div>
+              <button className="ghost-button" onClick={() => setPreviewOpen(false)} type="button">
+                닫기
+              </button>
+            </div>
+            <div className="editor-preview-surface editorial-preview-surface preview-modal-surface">
+              <ArticleRenderer className="preview-magazine" document={article.document} />
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      <form className="studio-card" onSubmit={submitArticle}>
       <div className="studio-card-header">
         <span className="eyebrow">Article Desk</span>
         <h2>새 기사 제출</h2>
@@ -605,14 +734,23 @@ export function StudioForm() {
       <p className="panel-note">제목, 데크, 호수를 먼저 정리한 뒤 블록을 쌓으면 지면 흐름이 훨씬 안정적으로 잡힙니다.</p>
       <div className="draft-status-row">
         <p className="inline-note">{draftMessage || (lastSavedAt ? `마지막 임시저장 ${new Date(lastSavedAt).toLocaleString("ko-KR")}` : "작성 내용은 브라우저에 임시저장됩니다.")}</p>
-        <button className="ghost-button" onClick={clearDraft} type="button">
-          임시저장 비우기
-        </button>
+        <div className="draft-status-actions">
+          <button className="ghost-button" onClick={() => setPreviewOpen(true)} type="button">
+            팝업 미리보기
+          </button>
+          <button className="ghost-button" onClick={clearDraft} type="button">
+            임시저장 비우기
+          </button>
+        </div>
       </div>
 
-      <InlineRichTextField label="제목" multiline={false} onChange={(value) => updateArticleField("title", value)} value={article.title} />
+      <div id="studio-field-title">
+        <InlineRichTextField label="제목" multiline={false} onChange={(value) => updateArticleField("title", value)} value={article.title} />
+      </div>
 
-      <InlineRichTextField label="데크" onChange={(value) => updateArticleField("deck", value)} rows={3} value={article.deck} />
+      <div id="studio-field-deck">
+        <InlineRichTextField label="데크" onChange={(value) => updateArticleField("deck", value)} rows={3} value={article.deck} />
+      </div>
 
       <div className="studio-row">
         <label>
@@ -626,11 +764,11 @@ export function StudioForm() {
       </div>
 
       <div className="studio-row">
-        <label>
+        <label id="studio-field-issue">
           <span>호수</span>
           <input onChange={(event) => updateArticleField("issue", event.target.value)} placeholder="예: 2026년 4월호" value={article.issue} />
         </label>
-        <label>
+        <label id="studio-field-readTime">
           <span>읽기 시간</span>
           <input onChange={(event) => updateArticleField("readTime", event.target.value)} value={article.readTime} />
         </label>
@@ -641,15 +779,23 @@ export function StudioForm() {
         <span>문단 안 서식 툴바와 자동 링크 인식을 포함한 블록 편집기</span>
       </div>
 
-      <div className="editor-toolbar">
-        {blockTypeOptions.map((option) => (
-          <button className="ghost-button" key={option.value} onClick={() => addBlock(option.value)} type="button">
-            {option.label} 추가
-          </button>
-        ))}
-      </div>
-
       <div className="editor-workbench">
+        <aside className="editor-block-sidebar" id="studio-block-toolbar">
+          <div className="editor-sticky-panel">
+            <div className="section-heading">
+              <p className="eyebrow">Add Blocks</p>
+              <span>스크롤 중에도 고정됩니다</span>
+            </div>
+            <div className="editor-sidebar-actions">
+              {blockTypeOptions.map((option) => (
+                <button className="ghost-button" key={option.value} onClick={() => addBlock(option.value)} type="button">
+                  {option.label} 추가
+                </button>
+              ))}
+            </div>
+          </div>
+        </aside>
+
         <div className="editor-block-list">
           {article.document.blocks.map((block, index) => (
             <BlockEditor
@@ -674,16 +820,6 @@ export function StudioForm() {
             />
           ))}
         </div>
-
-        <aside className="editor-preview-panel">
-          <div className="section-heading">
-            <p className="eyebrow">Live Preview</p>
-            <span>{article.document.blocks.length} blocks</span>
-          </div>
-          <div className="editor-preview-surface editorial-preview-surface">
-            <ArticleRenderer className="editorial-columns preview-magazine" document={article.document} />
-          </div>
-        </aside>
       </div>
 
       <section className="editor-reference-panel">
@@ -730,13 +866,40 @@ export function StudioForm() {
         )}
       </section>
 
+      {showValidationGuide && submissionIssues.length ? (
+        <section className="validation-panel">
+          <div className="section-heading">
+            <p className="eyebrow">제출 전 확인</p>
+            <span>부족한 항목을 눌러 바로 이동할 수 있습니다</span>
+          </div>
+          <ul className="validation-list">
+            {submissionIssues.map((issue) => (
+              <li key={issue.id}>
+                <button className="validation-link" onClick={() => scrollToTarget(issue.targetId)} type="button">
+                  {issue.message}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
       <div className="form-submit-row">
         <button className="primary-button wide-button" disabled={articlePending} type="submit">
           {articlePending ? "제출 중..." : "편집부에 제출"}
         </button>
+        {submissionIssues.length ? (
+          <p className="error-note">
+            현재 제출 전 확인 항목 {submissionIssues.length}개가 있습니다.
+            <button className="text-link-button" onClick={() => setShowValidationGuide(true)} type="button">
+              확인하기
+            </button>
+          </p>
+        ) : null}
         {isDirty ? <p className="status-note">입력 중인 변경 사항을 저장 중입니다.</p> : null}
-        {articleMessage ? <p className="status-note">{articleMessage}</p> : null}
+        {articleMessage ? <p className={articleMessage.includes("실패") || articleMessage.includes("부족") ? "error-note" : "status-note"}>{articleMessage}</p> : null}
       </div>
-    </form>
+      </form>
+    </>
   );
 }

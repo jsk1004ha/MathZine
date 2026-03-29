@@ -318,6 +318,8 @@ export function AdminAccountsPanel({ users }) {
 
 export function AdminEditorialPanel({ issues, articles }) {
   const router = useRouter();
+  const [coverMessage, setCoverMessage] = useState("");
+  const [pendingCoverIssueSlug, setPendingCoverIssueSlug] = useState("");
 
   async function publishIssue(issueSlug) {
     const response = await fetch(`/api/admin/issues/${issueSlug}/publish`, {
@@ -328,6 +330,56 @@ export function AdminEditorialPanel({ issues, articles }) {
     });
 
     if (response.ok) router.refresh();
+  }
+
+  async function uploadCover(issueSlug, event) {
+    event.preventDefault();
+    setPendingCoverIssueSlug(issueSlug);
+    setCoverMessage("");
+
+    try {
+      const formData = new FormData(event.currentTarget);
+      const response = await fetch(`/api/admin/issues/${issueSlug}/cover`, {
+        method: "POST",
+        body: formData
+      });
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(parseApiError(payload, "표지 업로드에 실패했습니다."));
+      }
+
+      setCoverMessage("표지를 저장했습니다.");
+      event.currentTarget.reset();
+      router.refresh();
+    } catch (error) {
+      setCoverMessage(error.message);
+    } finally {
+      setPendingCoverIssueSlug("");
+    }
+  }
+
+  async function clearCover(issueSlug) {
+    setPendingCoverIssueSlug(issueSlug);
+    setCoverMessage("");
+
+    try {
+      const response = await fetch(`/api/admin/issues/${issueSlug}/cover`, {
+        method: "DELETE"
+      });
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(parseApiError(payload, "표지 제거에 실패했습니다."));
+      }
+
+      setCoverMessage("표지를 제거했습니다. PDF는 기본 표지를 사용합니다.");
+      router.refresh();
+    } catch (error) {
+      setCoverMessage(error.message);
+    } finally {
+      setPendingCoverIssueSlug("");
+    }
   }
 
   return (
@@ -346,6 +398,18 @@ export function AdminEditorialPanel({ issues, articles }) {
                   상태 {issue.status} · 기사 {issue.articleCount}개 · 대기 {issue.submittedCount}개 · 공개 {issue.publishedCount}개
                 </p>
                 <p>{issue.leadTitle || "대표 기사 없음"}</p>
+                <p className="status-note">{issue.coverImageSrc ? "표지 이미지 설정됨" : "표지 미설정 · PDF 기본 표지 사용"}</p>
+                <form className="inline-upload-form" onSubmit={(event) => uploadCover(issue.issueSlug, event)}>
+                  <input accept="image/png,image/jpeg,image/webp" name="file" type="file" />
+                  <button className="ghost-button" disabled={pendingCoverIssueSlug === issue.issueSlug} type="submit">
+                    {pendingCoverIssueSlug === issue.issueSlug ? "업로드 중..." : "표지 업로드"}
+                  </button>
+                  {issue.coverImageSrc ? (
+                    <button className="ghost-button" onClick={() => clearCover(issue.issueSlug)} type="button">
+                      표지 제거
+                    </button>
+                  ) : null}
+                </form>
               </div>
               <div className="admin-score-controls">
                 <button className="primary-button" disabled={issue.status === "published" || issue.articleCount === 0} onClick={() => publishIssue(issue.issueSlug)} type="button">
@@ -356,6 +420,7 @@ export function AdminEditorialPanel({ issues, articles }) {
           ))}
           {issues.length === 0 ? <p className="status-note">아직 제출된 호수가 없습니다.</p> : null}
         </div>
+        {coverMessage ? <p className={coverMessage.includes("실패") ? "error-note" : "status-note"}>{coverMessage}</p> : null}
       </section>
 
       <section className="section-panel admin-wide">
