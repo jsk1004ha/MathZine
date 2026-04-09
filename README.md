@@ -101,6 +101,7 @@ cp .env.example .env.local
 - 인증/쓰기 API에는 공통 Rate Limit을 적용합니다.
 - 입력값은 서버에서 길이 제한과 정규화 과정을 거칩니다.
 - 업로드는 확장자뿐 아니라 파일 시그니처와 파일 크기를 함께 검사합니다.
+- 업로드 파일 읽기는 항상 `storage/uploads` 하위 경로로 강제되어 `..` 경로 이동 기반 로컬 파일 노출을 차단합니다.
 - 기사 읽기는 공개, 회원 행동은 닉네임 중심으로 표시됩니다.
 - 기사 제출은 `reporter` 또는 `admin`, 호수 공개/권한 변경/직접 계정 생성은 `admin`으로 제한됩니다.
 - 로컬 DB는 SQLite WAL 모드로 동작합니다.
@@ -181,6 +182,7 @@ cp .env.example .env.local
 - 잡지 PDF는 `playwright-core`와 시스템 Microsoft Edge를 사용해 실제 HTML 지면을 렌더링한 뒤 저장합니다.
 - `Math-Zine` 로고는 표지, 기사 상단, Colophon에서 블랙레터 계열 폰트 스택으로 렌더링됩니다.
 - 업로드된 로컬 이미지는 PDF 생성 시 data URI로 인라인 변환되어 플레이스홀더 없이 포함됩니다.
+- 인쇄/PDF용 로컬 미디어 인라인 변환은 `storage/uploads` 내부 파일만 허용합니다.
 - 외부 HTTPS 이미지도 그대로 렌더 대상에 포함됩니다.
 
 ## 로컬 백엔드 추천
