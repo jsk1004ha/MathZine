@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { canManageAdmin, getUserFromRequest } from "@/lib/auth";
+import { canManageEditorial, getUserFromRequest } from "@/lib/auth";
 import { jsonError } from "@/lib/api";
 import { getIssueBundle } from "@/lib/content";
 import { renderIssuePdf } from "@/lib/issue-pdf";
@@ -14,7 +14,7 @@ export async function GET(request, { params }) {
     if (!bundle && user) {
       const previewBundle = await getIssueBundle(issueSlug, { includeUnpublished: true, viewer: user });
 
-      if (previewBundle && (previewBundle.status === "published" || canManageAdmin(user) || previewBundle.articles.some((article) => article.authorId === user.id))) {
+      if (previewBundle && (previewBundle.status === "published" || canManageEditorial(user))) {
         bundle = previewBundle;
       }
     }

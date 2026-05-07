@@ -261,6 +261,19 @@ function BlockRenderer({ block, numberMap }) {
   }
 }
 
+function HtmlDocumentRenderer({ document }) {
+  return (
+    <iframe
+      className="article-block article-html-frame"
+      referrerPolicy="no-referrer"
+      sandbox=""
+      srcDoc={document.html}
+      style={{ height: `${document.htmlHeight}px` }}
+      title="HTML article content"
+    />
+  );
+}
+
 export function ArticleRenderer({ article, className = "", document }) {
   const normalized = normalizeArticleDocument(document ? { document } : article);
   const numberMap = getReferenceNumberMap(normalized);
@@ -268,9 +281,11 @@ export function ArticleRenderer({ article, className = "", document }) {
 
   return (
     <div className={`article-renderer ${className}`.trim()}>
-      {normalized.blocks.map((block) => (
-        <BlockRenderer block={block} key={block.id} numberMap={numberMap} />
-      ))}
+      {normalized.mode === "html" ? (
+        <HtmlDocumentRenderer document={normalized} />
+      ) : (
+        normalized.blocks.map((block) => <BlockRenderer block={block} key={block.id} numberMap={numberMap} />)
+      )}
 
       {references.length ? (
         <section className="article-references">

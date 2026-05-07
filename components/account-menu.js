@@ -58,6 +58,11 @@ export function AccountMenu({ user }) {
           어드민
         </a>
       ) : null}
+      {user.role === "teacher" ? (
+        <a className="utility-link" href="/admin/editorial">
+          편집 관리
+        </a>
+      ) : null}
       <button className="ghost-button" disabled={pending} onClick={handleLogout} type="button">
         {pending ? "로그아웃 중..." : "로그아웃"}
       </button>

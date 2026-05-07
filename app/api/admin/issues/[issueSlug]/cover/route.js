@@ -1,5 +1,5 @@
 import path from "node:path";
-import { canManageAdmin, getUserFromRequest } from "@/lib/auth";
+import { canManageEditorial, getUserFromRequest } from "@/lib/auth";
 import { updateIssueCover } from "@/lib/content";
 import { saveUpload } from "@/lib/files";
 import { jsonError, jsonSuccess } from "@/lib/api";
@@ -13,8 +13,8 @@ export async function POST(request, { params }) {
     await assertStateChangeAllowed(request, "admin.issue.cover", { limit: 20, windowMs: 60 * 60_000 });
     const user = await getUserFromRequest(request);
 
-    if (!canManageAdmin(user)) {
-      throw withErrorCode(new Error("어드민 권한이 필요합니다."), "FORBIDDEN", 403);
+    if (!canManageEditorial(user)) {
+      throw withErrorCode(new Error("편집 관리 권한이 필요합니다."), "FORBIDDEN", 403);
     }
 
     const formData = await request.formData();
@@ -59,8 +59,8 @@ export async function DELETE(request, { params }) {
     await assertStateChangeAllowed(request, "admin.issue.cover", { limit: 20, windowMs: 60 * 60_000 });
     const user = await getUserFromRequest(request);
 
-    if (!canManageAdmin(user)) {
-      throw withErrorCode(new Error("어드민 권한이 필요합니다."), "FORBIDDEN", 403);
+    if (!canManageEditorial(user)) {
+      throw withErrorCode(new Error("편집 관리 권한이 필요합니다."), "FORBIDDEN", 403);
     }
 
     const { issueSlug } = await params;

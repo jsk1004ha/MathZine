@@ -34,6 +34,7 @@ export function Header({ user }) {
           <Link href="/board">게시판</Link>
           {user && (user.role === "admin" || user.role === "reporter") ? <Link href="/studio">기사 제출</Link> : null}
           {user?.role === "admin" ? <Link href="/admin">어드민</Link> : null}
+          {user?.role === "teacher" ? <Link href="/admin/editorial">편집 관리</Link> : null}
           {!user ? <Link href="/login">로그인</Link> : null}
         </div>
         <form action="/search" className="header-search">

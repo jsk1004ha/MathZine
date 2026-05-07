@@ -1,10 +1,18 @@
+import { redirect } from "next/navigation";
 import { AdminHallPanel } from "@/components/admin-panels";
-import { listEditorialArticles, listHallSubmissions } from "@/lib/content";
+import { canManageAdmin, getCurrentUser } from "@/lib/auth";
+import { listHallSubmissions } from "@/lib/content";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminHallPage() {
-  const [articles, submissions] = await Promise.all([listEditorialArticles(), listHallSubmissions()]);
+  const user = await getCurrentUser();
 
-  return <AdminHallPanel articles={articles} submissions={submissions} />;
+  if (!canManageAdmin(user)) {
+    redirect("/admin/editorial");
+  }
+
+  const submissions = await listHallSubmissions();
+
+  return <AdminHallPanel submissions={submissions} />;
 }

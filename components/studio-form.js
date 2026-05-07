@@ -8,6 +8,7 @@ import { InlineRichTextField } from "@/components/inline-rich-text-field";
 import {
   calloutVariantOptions,
   createEmptyArticleDocument,
+  createEmptyHtmlArticleDocument,
   createEmptyBlock,
   createEmptyReference,
   equationTemplates,
@@ -29,15 +30,18 @@ const blockTypeOptions = [
 ];
 const STUDIO_DRAFT_KEY = "mathzine-studio-draft-v1";
 
-function getInitialArticle() {
+function getInitialArticle(availableIssues = []) {
+  const selectedIssue = availableIssues[0] ?? null;
+
   return {
     title: "",
     deck: "",
     section: "Feature",
     tag: "Mathematics",
-    issue: "",
+    issue: selectedIssue?.issue ?? "",
+    issueSlug: selectedIssue?.issueSlug ?? "",
     readTime: "5 min read",
-    document: createEmptyArticleDocument()
+    document: createEmptyHtmlArticleDocument()
   };
 }
 
@@ -47,9 +51,11 @@ function hasMeaningfulDraft(article) {
   const references = Array.isArray(document.references) ? document.references : [];
 
   return Boolean(
-    article?.title ||
+      article?.title ||
       article?.deck ||
       article?.issue ||
+      article?.issueSlug ||
+      document.html ||
       blocks.some((block) =>
         ["text", "body", "statement", "code", "src", "url", "caption", "title"].some((field) => String(block?.[field] ?? "").trim()) ||
         Object.values(block?.fields ?? {}).some((value) => String(value ?? "").trim())
@@ -88,7 +94,9 @@ function isFilled(value) {
 
 function getSubmissionIssues(article) {
   const issues = [];
+  const document = article?.document ?? {};
   const blocks = article?.document?.blocks ?? [];
+  const isLegacyEditor = document.mode === "legacy";
 
   if (!isFilled(article?.title)) {
     issues.push({ id: "title", targetId: "studio-field-title", message: "제목을 입력해 주세요." });
@@ -98,16 +106,24 @@ function getSubmissionIssues(article) {
     issues.push({ id: "deck", targetId: "studio-field-deck", message: "데크를 입력해 주세요." });
   }
 
-  if (!isFilled(article?.issue)) {
-    issues.push({ id: "issue", targetId: "studio-field-issue", message: "호수를 입력해 주세요." });
+  if (!isFilled(article?.issueSlug)) {
+    issues.push({ id: "issue", targetId: "studio-field-issue", message: "호수를 선택해 주세요." });
   }
 
   if (!isFilled(article?.readTime)) {
     issues.push({ id: "readTime", targetId: "studio-field-readTime", message: "읽기 시간을 입력해 주세요." });
   }
 
+  if (!isLegacyEditor) {
+    if (!isFilled(document.html)) {
+      issues.push({ id: "html-empty", targetId: "studio-html-editor", message: "HTML 코드를 입력해 주세요." });
+    }
+
+    return issues;
+  }
+
   if (!blocks.length) {
-    issues.push({ id: "blocks-empty", targetId: "studio-block-toolbar", message: "본문 블록을 하나 이상 추가해 주세요." });
+    issues.push({ id: "blocks-empty", targetId: "studio-block-toolbar", message: "구편집기 본문 블록을 하나 이상 추가해 주세요." });
     return issues;
   }
 
@@ -416,9 +432,9 @@ function BlockEditor({
   );
 }
 
-export function StudioForm() {
+export function StudioForm({ availableIssues = [] }) {
   const router = useRouter();
-  const [article, setArticle] = useState(getInitialArticle);
+  const [article, setArticle] = useState(() => getInitialArticle(availableIssues));
   const [articleMessage, setArticleMessage] = useState("");
   const [articlePending, setArticlePending] = useState(false);
   const [draftMessage, setDraftMessage] = useState("");
@@ -434,14 +450,30 @@ export function StudioForm() {
     const storedDraft = readStoredDraft();
 
     if (storedDraft?.article) {
-      setArticle(storedDraft.article);
+      const selectedIssue =
+        availableIssues.find((issue) => issue.issueSlug === storedDraft.article.issueSlug) ??
+        availableIssues.find((issue) => issue.issue === storedDraft.article.issue) ??
+        null;
+      const restoredDocument =
+        storedDraft.article.document?.mode || !storedDraft.article.document?.blocks
+          ? (storedDraft.article.document ?? createEmptyHtmlArticleDocument())
+          : {
+              ...storedDraft.article.document,
+              mode: "legacy"
+            };
+      setArticle({
+        ...storedDraft.article,
+        document: restoredDocument,
+        issue: selectedIssue?.issue ?? storedDraft.article.issue ?? "",
+        issueSlug: selectedIssue?.issueSlug ?? storedDraft.article.issueSlug ?? ""
+      });
       setLastSavedAt(storedDraft.savedAt || "");
       setDraftMessage(storedDraft.savedAt ? `임시저장본을 불러왔습니다. 마지막 저장 ${new Date(storedDraft.savedAt).toLocaleString("ko-KR")}` : "임시저장본을 불러왔습니다.");
     }
 
     isRestoringDraftRef.current = false;
     setDraftReady(true);
-  }, []);
+  }, [availableIssues]);
 
   useEffect(() => {
     if (!draftReady) {
@@ -551,6 +583,33 @@ export function StudioForm() {
         ...prev.document,
         references: updater(prev.document.references)
       }
+    }));
+  }
+
+  function updateDocumentField(field, value) {
+    setArticle((prev) => ({
+      ...prev,
+      document: {
+        ...prev.document,
+        [field]: value
+      }
+    }));
+  }
+
+  function changeEditorMode(mode) {
+    setArticle((prev) => ({
+      ...prev,
+      document: mode === "legacy" ? createEmptyArticleDocument() : createEmptyHtmlArticleDocument()
+    }));
+  }
+
+  function selectIssue(issueSlug) {
+    const selectedIssue = availableIssues.find((issue) => issue.issueSlug === issueSlug) ?? null;
+
+    setArticle((prev) => ({
+      ...prev,
+      issue: selectedIssue?.issue ?? "",
+      issueSlug: selectedIssue?.issueSlug ?? ""
     }));
   }
 
@@ -669,7 +728,7 @@ export function StudioForm() {
       }
 
       window.localStorage.removeItem(STUDIO_DRAFT_KEY);
-      setArticle(getInitialArticle());
+      setArticle(getInitialArticle(availableIssues));
       setLastSavedAt("");
       setDraftMessage("임시저장본을 비우고 새 원고 상태로 초기화했습니다.");
       setIsDirty(false);
@@ -682,9 +741,9 @@ export function StudioForm() {
     }
   }
 
-  function clearDraft() {
+function clearDraft() {
     window.localStorage.removeItem(STUDIO_DRAFT_KEY);
-    setArticle(getInitialArticle());
+    setArticle(getInitialArticle(availableIssues));
     setDraftMessage("임시저장본을 지웠습니다.");
     setLastSavedAt("");
     setIsDirty(false);
@@ -700,6 +759,9 @@ export function StudioForm() {
     target.scrollIntoView({ behavior: "smooth", block: "center" });
   }
 
+  const editorMode = article.document?.mode === "legacy" ? "legacy" : "html";
+  const previewLabel = editorMode === "legacy" ? `${article.document.blocks.length} blocks` : "HTML iframe";
+
   return (
     <>
       {previewOpen ? (
@@ -713,7 +775,7 @@ export function StudioForm() {
             <div className="preview-modal-header">
               <div className="section-heading">
                 <p className="eyebrow">Popup Preview</p>
-                <span>{article.document.blocks.length} blocks</span>
+                <span>{previewLabel}</span>
               </div>
               <button className="ghost-button" onClick={() => setPreviewOpen(false)} type="button">
                 닫기
@@ -766,7 +828,15 @@ export function StudioForm() {
       <div className="studio-row">
         <label id="studio-field-issue">
           <span>호수</span>
-          <input onChange={(event) => updateArticleField("issue", event.target.value)} placeholder="예: 2026년 4월호" value={article.issue} />
+          <select onChange={(event) => selectIssue(event.target.value)} value={article.issueSlug}>
+            <option value="">호수를 선택하세요</option>
+            {availableIssues.map((issue) => (
+              <option key={issue.issueSlug} value={issue.issueSlug}>
+                {issue.issue}
+              </option>
+            ))}
+          </select>
+          {!availableIssues.length ? <span className="inline-note">admin 또는 teacher가 먼저 편집 관리에서 호수를 만들어야 합니다.</span> : null}
         </label>
         <label id="studio-field-readTime">
           <span>읽기 시간</span>
@@ -775,96 +845,141 @@ export function StudioForm() {
       </div>
 
       <div className="section-heading">
-        <p className="eyebrow">Editor Blocks</p>
-        <span>문단 안 서식 툴바와 자동 링크 인식을 포함한 블록 편집기</span>
+        <p className="eyebrow">Article Editor</p>
+        <span>HTML 임베드 또는 구편집기 중 하나를 선택해 작성합니다</span>
       </div>
 
-      <div className="editor-workbench">
-        <aside className="editor-block-sidebar" id="studio-block-toolbar">
-          <div className="editor-sticky-panel">
-            <div className="section-heading">
-              <p className="eyebrow">Add Blocks</p>
-              <span>스크롤 중에도 고정됩니다</span>
-            </div>
-            <div className="editor-sidebar-actions">
-              {blockTypeOptions.map((option) => (
-                <button className="ghost-button" key={option.value} onClick={() => addBlock(option.value)} type="button">
-                  {option.label} 추가
-                </button>
+      <div className="editor-mode-switch">
+        <button className={editorMode === "html" ? "primary-button" : "ghost-button"} onClick={() => changeEditorMode("html")} type="button">
+          HTML 코드 입력
+        </button>
+        <button className={editorMode === "legacy" ? "primary-button" : "ghost-button"} onClick={() => changeEditorMode("legacy")} type="button">
+          구편집기
+        </button>
+      </div>
+
+      {editorMode === "html" ? (
+        <section className="html-editor-panel" id="studio-html-editor">
+          <div className="section-heading">
+            <p className="eyebrow">HTML Embed</p>
+            <span>입력한 코드는 기사와 PDF에서 sandbox iframe으로 표시됩니다</span>
+          </div>
+          <label>
+            <span>HTML 코드</span>
+            <textarea
+              onChange={(event) => updateDocumentField("html", event.target.value)}
+              placeholder={'<section style="padding:32px;font-family:sans-serif"><h1>나의 기사</h1><p>HTML로 자유롭게 구성하세요.</p></section>'}
+              rows={18}
+              value={article.document.html ?? ""}
+            />
+          </label>
+          <label>
+            <span>표시 높이(px)</span>
+            <input
+              max="2400"
+              min="240"
+              onChange={(event) => updateDocumentField("htmlHeight", event.target.value)}
+              type="number"
+              value={article.document.htmlHeight ?? 720}
+            />
+          </label>
+          <p className="inline-note">보안을 위해 스크립트, 폼, 팝업, 상위 페이지 접근 권한 없이 iframe 안에서만 렌더링됩니다.</p>
+        </section>
+      ) : (
+        <>
+          <div className="section-heading">
+            <p className="eyebrow">구편집기 Blocks</p>
+            <span>문단 안 서식 툴바와 자동 링크 인식을 포함한 기존 블록 편집기</span>
+          </div>
+
+          <div className="editor-workbench">
+            <aside className="editor-block-sidebar" id="studio-block-toolbar">
+              <div className="editor-sticky-panel">
+                <div className="section-heading">
+                  <p className="eyebrow">Add Blocks</p>
+                  <span>스크롤 중에도 고정됩니다</span>
+                </div>
+                <div className="editor-sidebar-actions">
+                  {blockTypeOptions.map((option) => (
+                    <button className="ghost-button" key={option.value} onClick={() => addBlock(option.value)} type="button">
+                      {option.label} 추가
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </aside>
+
+            <div className="editor-block-list">
+              {article.document.blocks.map((block, index) => (
+                <BlockEditor
+                  block={block}
+                  index={index}
+                  key={block.id}
+                  onDelete={() => removeBlock(block.id)}
+                  onMoveDown={() => moveBlock(block.id, "down")}
+                  onMoveUp={() => moveBlock(block.id, "up")}
+                  onReferenceChange={(value) => updateBlock(block.id, "referenceIds", value)}
+                  onTypeChange={(value) => changeBlockType(block.id, value)}
+                  onUpdate={(field, value, extra) => {
+                    if (field === "equationField") {
+                      updateBlock(block.id, field, value, extra);
+                      return;
+                    }
+
+                    updateBlock(block.id, field, value, extra);
+                  }}
+                  references={article.document.references}
+                  total={article.document.blocks.length}
+                />
               ))}
             </div>
           </div>
-        </aside>
 
-        <div className="editor-block-list">
-          {article.document.blocks.map((block, index) => (
-            <BlockEditor
-              block={block}
-              index={index}
-              key={block.id}
-              onDelete={() => removeBlock(block.id)}
-              onMoveDown={() => moveBlock(block.id, "down")}
-              onMoveUp={() => moveBlock(block.id, "up")}
-              onReferenceChange={(value) => updateBlock(block.id, "referenceIds", value)}
-              onTypeChange={(value) => changeBlockType(block.id, value)}
-              onUpdate={(field, value, extra) => {
-                if (field === "equationField") {
-                  updateBlock(block.id, field, value, extra);
-                  return;
-                }
+          <section className="editor-reference-panel">
+            <div className="section-heading">
+              <p className="eyebrow">References</p>
+              <button className="ghost-button" onClick={addReference} type="button">
+                참고문헌 추가
+              </button>
+            </div>
 
-                updateBlock(block.id, field, value, extra);
-              }}
-              references={article.document.references}
-              total={article.document.blocks.length}
-            />
-          ))}
-        </div>
-      </div>
-
-      <section className="editor-reference-panel">
-        <div className="section-heading">
-          <p className="eyebrow">References</p>
-          <button className="ghost-button" onClick={addReference} type="button">
-            참고문헌 추가
-          </button>
-        </div>
-
-        {article.document.references.length ? (
-          <div className="reference-list">
-            {article.document.references.map((reference) => (
-              <article className="reference-card" key={reference.id}>
-                <div className="block-editor-header">
-                  <strong>{reference.title || "제목 없는 참고문헌"}</strong>
-                  <button className="ghost-button" onClick={() => removeReference(reference.id)} type="button">
-                    삭제
-                  </button>
-                </div>
-                <div className="block-grid">
-                  <label>
-                    <span>저자</span>
-                    <input onChange={(event) => updateReference(reference.id, "authors", event.target.value)} value={reference.authors} />
-                  </label>
-                  <label>
-                    <span>출처</span>
-                    <input onChange={(event) => updateReference(reference.id, "source", event.target.value)} value={reference.source} />
-                  </label>
-                </div>
-                <label>
-                  <span>제목</span>
-                  <input onChange={(event) => updateReference(reference.id, "title", event.target.value)} value={reference.title} />
-                </label>
-                <label>
-                  <span>링크</span>
-                  <input onChange={(event) => updateReference(reference.id, "url", event.target.value)} value={reference.url} />
-                </label>
-              </article>
-            ))}
-          </div>
-        ) : (
-          <p className="inline-note">아직 참고문헌이 없습니다. 블록에 각주를 달고 싶다면 하나 이상 추가하세요.</p>
-        )}
-      </section>
+            {article.document.references.length ? (
+              <div className="reference-list">
+                {article.document.references.map((reference) => (
+                  <article className="reference-card" key={reference.id}>
+                    <div className="block-editor-header">
+                      <strong>{reference.title || "제목 없는 참고문헌"}</strong>
+                      <button className="ghost-button" onClick={() => removeReference(reference.id)} type="button">
+                        삭제
+                      </button>
+                    </div>
+                    <div className="block-grid">
+                      <label>
+                        <span>저자</span>
+                        <input onChange={(event) => updateReference(reference.id, "authors", event.target.value)} value={reference.authors} />
+                      </label>
+                      <label>
+                        <span>출처</span>
+                        <input onChange={(event) => updateReference(reference.id, "source", event.target.value)} value={reference.source} />
+                      </label>
+                    </div>
+                    <label>
+                      <span>제목</span>
+                      <input onChange={(event) => updateReference(reference.id, "title", event.target.value)} value={reference.title} />
+                    </label>
+                    <label>
+                      <span>링크</span>
+                      <input onChange={(event) => updateReference(reference.id, "url", event.target.value)} value={reference.url} />
+                    </label>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <p className="inline-note">아직 참고문헌이 없습니다. 블록에 각주를 달고 싶다면 하나 이상 추가하세요.</p>
+            )}
+          </section>
+        </>
+      )}
 
       {showValidationGuide && submissionIssues.length ? (
         <section className="validation-panel">

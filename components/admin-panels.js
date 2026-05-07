@@ -5,13 +5,15 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { parseApiError } from "@/lib/api-client";
 
-export function AdminNav() {
+export function AdminNav({ user }) {
+  const isAdmin = user?.role === "admin";
+
   return (
     <nav className="admin-nav">
-      <Link href="/admin">대시보드</Link>
+      {isAdmin ? <Link href="/admin">대시보드</Link> : null}
       <Link href="/admin/editorial">편집 관리</Link>
-      <Link href="/admin/accounts">계정 관리</Link>
-      <Link href="/admin/hall-of-fame">명예의 전당</Link>
+      {isAdmin ? <Link href="/admin/accounts">계정 관리</Link> : null}
+      {isAdmin ? <Link href="/admin/hall-of-fame">명예의 전당</Link> : null}
     </nav>
   );
 }
@@ -104,7 +106,7 @@ export function AdminDashboard({
   );
 }
 
-export function AdminAccountsPanel({ users }) {
+export function AdminAccountsPanel({ currentUserId, users }) {
   const router = useRouter();
   const [accountForm, setAccountForm] = useState({
     loginId: "",
@@ -183,6 +185,25 @@ export function AdminAccountsPanel({ users }) {
     setAccountMessage("비밀번호를 재설정했습니다.");
   }
 
+  async function deleteAccount(userId, nickname) {
+    if (!window.confirm(`${nickname} 계정을 삭제할까요? 작성 콘텐츠는 탈퇴한 사용자로 표시됩니다.`)) {
+      return;
+    }
+
+    const response = await fetch(`/api/admin/users/${userId}`, {
+      method: "DELETE"
+    });
+    const payload = await response.json();
+
+    if (!response.ok) {
+      setAccountMessage(parseApiError(payload, "계정 삭제에 실패했습니다."));
+      return;
+    }
+
+    setAccountMessage("계정을 삭제하고 작성 기록을 익명화했습니다.");
+    router.refresh();
+  }
+
   async function createManagedAccount(event) {
     event.preventDefault();
     setPendingAccount(true);
@@ -256,6 +277,11 @@ export function AdminAccountsPanel({ users }) {
                     비밀번호 재설정
                   </button>
                 ) : null}
+                {user.id !== currentUserId ? (
+                  <button className="ghost-button danger-button" onClick={() => deleteAccount(user.id, user.nickname)} type="button">
+                    계정 삭제
+                  </button>
+                ) : null}
               </div>
             </div>
           ))}
@@ -318,8 +344,39 @@ export function AdminAccountsPanel({ users }) {
 
 export function AdminEditorialPanel({ issues, articles }) {
   const router = useRouter();
-  const [coverMessage, setCoverMessage] = useState("");
+  const [issueForm, setIssueForm] = useState({ issue: "" });
+  const [editorialMessage, setEditorialMessage] = useState("");
   const [pendingCoverIssueSlug, setPendingCoverIssueSlug] = useState("");
+  const [pendingIssueCreate, setPendingIssueCreate] = useState(false);
+
+  async function createIssue(event) {
+    event.preventDefault();
+    setPendingIssueCreate(true);
+    setEditorialMessage("");
+
+    try {
+      const response = await fetch("/api/admin/issues", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(issueForm)
+      });
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(parseApiError(payload, "호수 생성에 실패했습니다."));
+      }
+
+      setIssueForm({ issue: "" });
+      setEditorialMessage("새 호수를 만들었습니다. 기자는 이 호수를 선택해 기사를 제출할 수 있습니다.");
+      router.refresh();
+    } catch (error) {
+      setEditorialMessage(error.message);
+    } finally {
+      setPendingIssueCreate(false);
+    }
+  }
 
   async function publishIssue(issueSlug) {
     const response = await fetch(`/api/admin/issues/${issueSlug}/publish`, {
@@ -328,14 +385,43 @@ export function AdminEditorialPanel({ issues, articles }) {
         "Content-Type": "application/json"
       }
     });
+    const payload = await response.json();
 
-    if (response.ok) router.refresh();
+    if (!response.ok) {
+      setEditorialMessage(parseApiError(payload, "호수 공개에 실패했습니다."));
+      return;
+    }
+
+    setEditorialMessage("호수를 공개했습니다.");
+    router.refresh();
+  }
+
+  async function unpublishIssue(issueSlug) {
+    if (!window.confirm("이 호수를 내릴까요? 연결된 기사는 다시 검토 대기 상태가 됩니다.")) {
+      return;
+    }
+
+    const response = await fetch(`/api/admin/issues/${issueSlug}/unpublish`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      }
+    });
+    const payload = await response.json();
+
+    if (!response.ok) {
+      setEditorialMessage(parseApiError(payload, "호수 내리기에 실패했습니다."));
+      return;
+    }
+
+    setEditorialMessage("호수를 내리고 연결 기사를 검토 대기로 전환했습니다.");
+    router.refresh();
   }
 
   async function uploadCover(issueSlug, event) {
     event.preventDefault();
     setPendingCoverIssueSlug(issueSlug);
-    setCoverMessage("");
+    setEditorialMessage("");
 
     try {
       const formData = new FormData(event.currentTarget);
@@ -349,11 +435,11 @@ export function AdminEditorialPanel({ issues, articles }) {
         throw new Error(parseApiError(payload, "표지 업로드에 실패했습니다."));
       }
 
-      setCoverMessage("표지를 저장했습니다.");
+      setEditorialMessage("표지를 저장했습니다.");
       event.currentTarget.reset();
       router.refresh();
     } catch (error) {
-      setCoverMessage(error.message);
+      setEditorialMessage(error.message);
     } finally {
       setPendingCoverIssueSlug("");
     }
@@ -361,7 +447,7 @@ export function AdminEditorialPanel({ issues, articles }) {
 
   async function clearCover(issueSlug) {
     setPendingCoverIssueSlug(issueSlug);
-    setCoverMessage("");
+    setEditorialMessage("");
 
     try {
       const response = await fetch(`/api/admin/issues/${issueSlug}/cover`, {
@@ -373,21 +459,56 @@ export function AdminEditorialPanel({ issues, articles }) {
         throw new Error(parseApiError(payload, "표지 제거에 실패했습니다."));
       }
 
-      setCoverMessage("표지를 제거했습니다. PDF는 기본 표지를 사용합니다.");
+      setEditorialMessage("표지를 제거했습니다. PDF는 기본 표지를 사용합니다.");
       router.refresh();
     } catch (error) {
-      setCoverMessage(error.message);
+      setEditorialMessage(error.message);
     } finally {
       setPendingCoverIssueSlug("");
     }
+  }
+
+  async function deleteArticle(slug, title) {
+    if (!window.confirm(`기사 "${title}"만 삭제할까요? 댓글은 삭제되고, 연결 문제/제출 기록은 명예의 전당에 남겨 둡니다.`)) {
+      return;
+    }
+
+    const response = await fetch(`/api/admin/articles/${slug}`, {
+      method: "DELETE"
+    });
+    const payload = await response.json();
+
+    if (!response.ok) {
+      setEditorialMessage(parseApiError(payload, "기사 삭제에 실패했습니다."));
+      return;
+    }
+
+    setEditorialMessage("기사만 삭제했습니다. 연결 문제는 보존했습니다.");
+    router.refresh();
   }
 
   return (
     <div className="admin-grid">
       <section className="section-panel admin-wide">
         <div className="section-heading">
+          <p className="eyebrow">호수 먼저 만들기</p>
+          <span>admin 또는 teacher가 호수를 만든 뒤 기자가 선택합니다</span>
+        </div>
+        <form className="admin-form inline-admin-form" onSubmit={createIssue}>
+          <label>
+            <span>새 호수 이름</span>
+            <input onChange={(event) => setIssueForm({ issue: event.target.value })} placeholder="예: 2026년 5월호" value={issueForm.issue} />
+          </label>
+          <button className="primary-button" disabled={pendingIssueCreate} type="submit">
+            {pendingIssueCreate ? "생성 중..." : "호수 생성"}
+          </button>
+        </form>
+      </section>
+
+      <section className="section-panel admin-wide">
+        <div className="section-heading">
           <p className="eyebrow">호수 공개 관리</p>
-          <span>기사는 제출되고, 호수 단위로 공개됩니다</span>
+          <span>기사는 제출되고, 호수 단위로 공개/내리기 됩니다</span>
         </div>
         <div className="admin-submission-list">
           {issues.map((issue) => (
@@ -412,38 +533,48 @@ export function AdminEditorialPanel({ issues, articles }) {
                 </form>
               </div>
               <div className="admin-score-controls">
-                <button className="primary-button" disabled={issue.status === "published" || issue.articleCount === 0} onClick={() => publishIssue(issue.issueSlug)} type="button">
-                  {issue.status === "published" ? "공개 완료" : "호수 공개"}
-                </button>
+                {issue.status === "published" ? (
+                  <button className="ghost-button danger-button" onClick={() => unpublishIssue(issue.issueSlug)} type="button">
+                    호 내리기
+                  </button>
+                ) : (
+                  <button className="primary-button" disabled={issue.articleCount === 0} onClick={() => publishIssue(issue.issueSlug)} type="button">
+                    호수 공개
+                  </button>
+                )}
               </div>
             </div>
           ))}
-          {issues.length === 0 ? <p className="status-note">아직 제출된 호수가 없습니다.</p> : null}
+          {issues.length === 0 ? <p className="status-note">아직 생성된 호수가 없습니다. 먼저 호수를 만들어 주세요.</p> : null}
         </div>
-        {coverMessage ? <p className={coverMessage.includes("실패") ? "error-note" : "status-note"}>{coverMessage}</p> : null}
+        {editorialMessage ? <p className={editorialMessage.includes("실패") ? "error-note" : "status-note"}>{editorialMessage}</p> : null}
       </section>
 
       <section className="section-panel admin-wide">
         <div className="section-heading">
-          <p className="eyebrow">제출 기사 목록</p>
-          <span>어드민 검토 대상</span>
+          <p className="eyebrow">기사 목록</p>
+          <span>제출·공개 기사 삭제 관리</span>
         </div>
         <div className="story-list">
           {articles.map((article) => (
-            <a className="story-row" href={`/articles/${article.slug}`} key={article.slug}>
-              <div>
+            <div className="story-row" key={article.slug}>
+              <a href={`/articles/${article.slug}`}>
                 <p className="story-tag">
                   {article.issue} · {article.status}
                 </p>
                 <h3>{article.title}</h3>
                 <p>{article.deck}</p>
-              </div>
+              </a>
               <span className="story-metric">
                 {article.authorNickname}
                 <br />
                 {new Date(article.submittedAt ?? article.updatedAt).toLocaleDateString("ko-KR")}
+                <br />
+                <button className="ghost-button danger-button" onClick={() => deleteArticle(article.slug, article.title)} type="button">
+                  기사만 삭제
+                </button>
               </span>
-            </a>
+            </div>
           ))}
           {articles.length === 0 ? <p className="status-note">아직 제출된 기사가 없습니다.</p> : null}
         </div>
@@ -452,15 +583,8 @@ export function AdminEditorialPanel({ issues, articles }) {
   );
 }
 
-export function AdminHallPanel({ articles, submissions }) {
+export function AdminHallPanel({ submissions }) {
   const router = useRouter();
-  const [problemForm, setProblemForm] = useState({
-    articleSlug: articles[0]?.slug ?? "",
-    title: "",
-    prompt: ""
-  });
-  const [problemMessage, setProblemMessage] = useState("");
-  const [pendingProblem, setPendingProblem] = useState(false);
 
   async function awardSubmission(submissionId, formData) {
     const points = Number(formData.get(`points_${submissionId}`));
@@ -477,122 +601,55 @@ export function AdminHallPanel({ articles, submissions }) {
     router.refresh();
   }
 
-  async function createProblem(event) {
-    event.preventDefault();
-    setPendingProblem(true);
-    setProblemMessage("");
-
-    try {
-      const response = await fetch("/api/admin/hall-problems", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(problemForm)
-      });
-
-      const payload = await response.json();
-
-      if (!response.ok) {
-        throw new Error(parseApiError(payload, "문제 생성에 실패했습니다."));
-      }
-
-      setProblemForm({
-        articleSlug: articles[0]?.slug ?? "",
-        title: "",
-        prompt: ""
-      });
-      setProblemMessage("문제를 등록했습니다.");
-      router.refresh();
-    } catch (error) {
-      setProblemMessage(error.message);
-    } finally {
-      setPendingProblem(false);
-    }
-  }
-
   return (
-    <div className="admin-grid">
-      <section className="section-panel">
-        <div className="section-heading">
-          <p className="eyebrow">문제 등록</p>
-          <span>기사와 연결된 PDF 풀이 문제</span>
-        </div>
-        <p className="panel-note">문제는 기사와 직접 연결됩니다. 제목은 짧게, 설명은 제출 기준이 드러나게 적는 편이 좋습니다.</p>
-        <form className="admin-form" onSubmit={createProblem}>
-          <label>
-            <span>연결 기사</span>
-            <select onChange={(event) => setProblemForm((prev) => ({ ...prev, articleSlug: event.target.value }))} value={problemForm.articleSlug}>
-              {articles.map((article) => (
-                <option key={article.slug} value={article.slug}>
-                  {article.issue} · {article.title} ({article.status})
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            <span>문제 제목</span>
-            <input onChange={(event) => setProblemForm((prev) => ({ ...prev, title: event.target.value }))} value={problemForm.title} />
-          </label>
-          <label>
-            <span>문제 설명</span>
-            <textarea onChange={(event) => setProblemForm((prev) => ({ ...prev, prompt: event.target.value }))} rows={6} value={problemForm.prompt} />
-          </label>
-          <div className="form-submit-row">
-            <button className="primary-button" disabled={pendingProblem} type="submit">
-              {pendingProblem ? "등록 중..." : "문제 등록"}
-            </button>
-            {problemMessage ? <p className="error-note">{problemMessage}</p> : null}
-          </div>
-        </form>
-      </section>
-
-      <section className="section-panel admin-wide">
-        <div className="section-heading">
-          <p className="eyebrow">풀이 채점</p>
-          <span>점수 랭킹 반영</span>
-        </div>
-        <div className="admin-submission-list">
-          {submissions.map((submission) => (
-            <form
-              className="admin-submission-card"
-              key={submission.id}
-              onSubmit={(event) => {
-                event.preventDefault();
-                const formData = new FormData(event.currentTarget);
-                awardSubmission(submission.id, formData);
-              }}
-            >
-              <div>
-                <strong>{submission.nickname}</strong>
-                <p>
-                  {submission.problem?.title ?? "문제 없음"} · {new Date(submission.submittedAt).toLocaleString("ko-KR")}
-                </p>
-                <p>
-                  {submission.originalFileName} · {submission.fileKind === "image" ? "이미지 제출" : "PDF 제출"}
-                </p>
-                {submission.storedFileName ? (
-                  <a href={`/api/admin/hall-submissions/${submission.id}/file`} rel="noreferrer" target="_blank">
-                    첨부 열기
-                  </a>
-                ) : null}
-              </div>
-              <div className="admin-score-controls">
-                <select defaultValue={submission.status} name={`status_${submission.id}`}>
-                  <option value="submitted">submitted</option>
-                  <option value="awarded">awarded</option>
-                  <option value="rejected">rejected</option>
-                </select>
-                <input defaultValue={submission.awardedPoints ?? 0} min="0" name={`points_${submission.id}`} type="number" />
-                <button className="ghost-button" type="submit">
-                  저장
-                </button>
-              </div>
-            </form>
-          ))}
-          {submissions.length === 0 ? <p className="status-note">제출된 풀이가 없습니다.</p> : null}
-        </div>
-      </section>
-    </div>
+    <section className="section-panel admin-wide">
+      <div className="section-heading">
+        <p className="eyebrow">풀이 채점</p>
+        <span>문제 생성은 각 기사 상세에서 기자가 직접 진행합니다</span>
+      </div>
+      <p className="panel-note">어드민은 전체 제출물을 확인하고 보정 채점할 수 있습니다. 서술형 문제 작성자도 각 기사 상세에서 자신의 문제를 채점할 수 있습니다.</p>
+      <div className="admin-submission-list">
+        {submissions.map((submission) => (
+          <form
+            className="admin-submission-card"
+            key={submission.id}
+            onSubmit={(event) => {
+              event.preventDefault();
+              const formData = new FormData(event.currentTarget);
+              awardSubmission(submission.id, formData);
+            }}
+          >
+            <div>
+              <strong>{submission.nickname}</strong>
+              <p>
+                {submission.problem?.title ?? "문제 없음"} · {new Date(submission.submittedAt).toLocaleString("ko-KR")}
+              </p>
+              {submission.answerText ? <p className="submission-answer">답안: {submission.answerText}</p> : null}
+              <p>
+                {submission.originalFileName || "텍스트 답안"} · {submission.fileKind === "image" ? "이미지 제출" : submission.fileKind === "text" ? "텍스트 제출" : "PDF 제출"}
+              </p>
+              {submission.storedFileName ? (
+                <a href={`/api/admin/hall-submissions/${submission.id}/file`} rel="noreferrer" target="_blank">
+                  첨부 열기
+                </a>
+              ) : null}
+              {submission.autoGraded ? <p className="inline-note">자동 채점: {submission.isCorrect ? "정답" : "오답"}</p> : null}
+            </div>
+            <div className="admin-score-controls">
+              <select defaultValue={submission.status} name={`status_${submission.id}`}>
+                <option value="submitted">submitted</option>
+                <option value="awarded">awarded</option>
+                <option value="rejected">rejected</option>
+              </select>
+              <input defaultValue={submission.awardedPoints ?? 0} min="0" name={`points_${submission.id}`} type="number" />
+              <button className="ghost-button" type="submit">
+                저장
+              </button>
+            </div>
+          </form>
+        ))}
+        {submissions.length === 0 ? <p className="status-note">제출된 풀이가 없습니다.</p> : null}
+      </div>
+    </section>
   );
 }

@@ -21,24 +21,28 @@ export async function POST(request) {
 
     const formData = await request.formData();
     const problemId = String(formData.get("problemId") ?? "");
+    const answerText = String(formData.get("answerText") ?? "");
+    const selectedChoice = String(formData.get("selectedChoice") ?? "");
     const file = formData.get("file");
+    let upload = {};
 
-    if (!(file instanceof File)) {
-      throw withErrorCode(new Error("제출 파일을 업로드해 주세요."), "FILE_REQUIRED", 400);
+    if (file instanceof File && file.size > 0) {
+      const lowerName = file.name.toLowerCase();
+      const isPdf = file.type === "application/pdf" || lowerName.endsWith(".pdf");
+      const isImage = file.type.startsWith("image/") || [".png", ".jpg", ".jpeg", ".webp"].some((extension) => lowerName.endsWith(extension));
+
+      if (!isPdf && !isImage) {
+        throw withErrorCode(new Error("PDF 또는 이미지 형식만 업로드할 수 있습니다."), "FILE_TYPE_INVALID", 400);
+      }
+
+      upload = await saveSubmissionUpload(file);
     }
 
-    const lowerName = file.name.toLowerCase();
-    const isPdf = file.type === "application/pdf" || lowerName.endsWith(".pdf");
-    const isImage = file.type.startsWith("image/") || [".png", ".jpg", ".jpeg", ".webp"].some((extension) => lowerName.endsWith(extension));
-
-    if (!isPdf && !isImage) {
-      throw withErrorCode(new Error("PDF 또는 이미지 형식만 업로드할 수 있습니다."), "FILE_TYPE_INVALID", 400);
-    }
-
-    const upload = await saveSubmissionUpload(file);
     const submission = await createHallSubmission(
       {
         problemId,
+        answerText,
+        selectedChoice,
         ...upload
       },
       user

@@ -1,10 +1,17 @@
+import { redirect } from "next/navigation";
 import { AdminDashboard } from "@/components/admin-panels";
-import { listUsers } from "@/lib/auth";
+import { canManageAdmin, getCurrentUser, listUsers } from "@/lib/auth";
 import { listEditorialArticles, listEditorialIssues, listHallSubmissions } from "@/lib/content";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminPage() {
+  const user = await getCurrentUser();
+
+  if (!canManageAdmin(user)) {
+    redirect("/admin/editorial");
+  }
+
   const [users, submissions, articles, issues] = await Promise.all([
     listUsers(),
     listHallSubmissions(),

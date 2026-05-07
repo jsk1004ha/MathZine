@@ -5,9 +5,11 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "prestart": "node scripts/ensure-production-build.cjs",
     "start": "next start",
     "lint": "eslint . --max-warnings=0",
-    "test": "node scripts/smoke-test.cjs",
+    "test": "npm run test:content && node scripts/smoke-test.cjs",
+    "test:content": "node --experimental-vm-modules scripts/content-regression.cjs",
     "typecheck": "node scripts/typecheck.cjs",
     "check": "npm run lint && npm run test"
   },

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { StudioForm } from "@/components/studio-form";
 import { canWriteArticles, getCurrentUser } from "@/lib/auth";
-import { listArticlesByAuthor } from "@/lib/content";
+import { listArticlesByAuthor, listWritableIssues } from "@/lib/content";
 
 export default async function StudioPage() {
   const user = await getCurrentUser();
@@ -28,7 +28,7 @@ export default async function StudioPage() {
     );
   }
 
-  const articles = await listArticlesByAuthor(user.id);
+  const [articles, writableIssues] = await Promise.all([listArticlesByAuthor(user.id), listWritableIssues()]);
 
   return (
     <div className="page-single">
@@ -38,7 +38,7 @@ export default async function StudioPage() {
         <p>사진, 영상, 링크, 콜아웃, 정리, 증명, 수식, 코드, 각주를 블록 단위로 조합하고 우측 프리뷰에서 바로 확인할 수 있습니다.</p>
       </section>
 
-      <StudioForm />
+      <StudioForm availableIssues={writableIssues} />
 
       <section className="section-panel">
         <div className="section-heading">

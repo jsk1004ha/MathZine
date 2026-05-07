@@ -1,9 +1,16 @@
+import { redirect } from "next/navigation";
 import { AdminAccountsPanel } from "@/components/admin-panels";
-import { listUsers } from "@/lib/auth";
+import { canManageAdmin, getCurrentUser, listUsers } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminAccountsPage() {
+  const user = await getCurrentUser();
+
+  if (!canManageAdmin(user)) {
+    redirect("/admin/editorial");
+  }
+
   const users = await listUsers();
-  return <AdminAccountsPanel users={users} />;
+  return <AdminAccountsPanel currentUserId={user.id} users={users} />;
 }

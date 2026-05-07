@@ -1,12 +1,12 @@
 import { canManageEditorial, getUserFromRequest } from "@/lib/auth";
-import { publishIssue } from "@/lib/content";
+import { unpublishIssue } from "@/lib/content";
 import { jsonError, jsonSuccess } from "@/lib/api";
 import { assertStateChangeAllowed, logAuditEvent } from "@/lib/ops";
 import { withErrorCode } from "@/lib/security";
 
 export async function POST(request, { params }) {
   try {
-    await assertStateChangeAllowed(request, "admin.issue.publish", { limit: 12, windowMs: 60 * 60_000 });
+    await assertStateChangeAllowed(request, "admin.issue.unpublish", { limit: 12, windowMs: 60 * 60_000 });
     const user = await getUserFromRequest(request);
 
     if (!canManageEditorial(user)) {
@@ -14,10 +14,10 @@ export async function POST(request, { params }) {
     }
 
     const { issueSlug } = await params;
-    const issue = await publishIssue(issueSlug);
-    await logAuditEvent("admin.issue_published", { actorUserId: user.id, issueSlug: issue.issueSlug });
+    const issue = await unpublishIssue(issueSlug);
+    await logAuditEvent("admin.issue_unpublished", { actorUserId: user.id, issueSlug: issue.issueSlug });
     return jsonSuccess({ issue });
   } catch (error) {
-    return jsonError(error, { code: "ADMIN_ISSUE_PUBLISH_FAILED" });
+    return jsonError(error, { code: "ADMIN_ISSUE_UNPUBLISH_FAILED" });
   }
 }

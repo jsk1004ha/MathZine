@@ -1,4 +1,4 @@
-import { canManageAdmin, getCurrentUser } from "@/lib/auth";
+import { canManageEditorial, getCurrentUser } from "@/lib/auth";
 import { getIssueBundle } from "@/lib/content";
 import { getIssuePrintCss, renderIssuePrintBodyHtml } from "@/lib/issue-print";
 
@@ -17,7 +17,7 @@ export default async function IssuePrintPreviewPage({ params }) {
   if (!bundle && user) {
     const previewBundle = await getIssueBundle(issueSlug, { includeUnpublished: true, viewer: user });
 
-    if (previewBundle && (canManageAdmin(user) || previewBundle.articles.some((article) => article.authorId === user.id))) {
+    if (previewBundle && canManageEditorial(user)) {
       bundle = previewBundle;
     }
   }

@@ -1,9 +1,11 @@
 import { ArticleRenderer } from "@/components/article-renderer";
 import { CommentForm } from "@/components/comment-form";
+import { HallProblemForm } from "@/components/hall-problem-form";
 import { HallSubmissionForm } from "@/components/hall-submission-form";
+import { HallSubmissionReview } from "@/components/hall-submission-review";
 import { LikeButton } from "@/components/like-button";
 import { ViewTracker } from "@/components/view-tracker";
-import { canPreviewArticle, getCurrentUser } from "@/lib/auth";
+import { canCreateHallProblemForArticle, canPreviewArticle, getCurrentUser } from "@/lib/auth";
 import { getArticleBySlug, getArticlePageBundle } from "@/lib/content";
 
 export const dynamic = "force-dynamic";
@@ -74,7 +76,9 @@ export default async function ArticlePage({ params }) {
   const bundle = await getArticlePageBundle(slug, { includeUnpublished: isPreview, viewer: user });
   const comments = bundle?.comments ?? [];
   const related = bundle?.related ?? [];
+  const linkedProblems = bundle?.article?.linkedProblems ?? article.linkedProblems ?? [];
   const liked = user ? article.likeUserIds.includes(user.id) : false;
+  const canCreateProblem = canCreateHallProblemForArticle(user, article);
 
   return (
     <div className="article-layout">
@@ -139,25 +143,6 @@ export default async function ArticlePage({ params }) {
         </div>
       </section>
 
-      {article.linkedProblems.length ? (
-        <section className="section-panel">
-          <div className="section-heading">
-            <p className="eyebrow">이 기사와 연결된 문제</p>
-            <span>PDF 풀이 제출</span>
-          </div>
-          <div className="story-list">
-            {article.linkedProblems.map((problem) => (
-              <article className="archive-card" key={problem.id}>
-                <p className="story-tag">{problem.issue}</p>
-                <h3>{problem.title}</h3>
-                <p>{problem.prompt}</p>
-                <HallSubmissionForm canSubmit={Boolean(user)} problem={problem} />
-              </article>
-            ))}
-          </div>
-        </section>
-      ) : null}
-
       <section className="section-panel comments-panel">
         <div className="section-heading">
           <p className="eyebrow">댓글 창</p>
@@ -178,6 +163,37 @@ export default async function ArticlePage({ params }) {
           </div>
         ) : null}
       </section>
+
+      {linkedProblems.length || canCreateProblem ? (
+        <section className="section-panel">
+          <div className="section-heading">
+            <p className="eyebrow">이 기사와 연결된 문제</p>
+            <span>접었다 펼쳐서 풀이</span>
+          </div>
+          <p className="panel-note">문제는 기본적으로 접혀 있어 기사 읽기를 방해하지 않습니다. 필요할 때만 펼쳐서 풀거나 제출하면 됩니다.</p>
+          {canCreateProblem ? <HallProblemForm articleSlug={article.slug} /> : null}
+          <div className="story-list">
+            {linkedProblems.map((problem) => (
+              <details className="article-problem-details" key={problem.id}>
+                <summary>
+                  <span>
+                    {problem.type === "multiple_choice" ? "객관식" : problem.type === "short_answer" ? "주관식" : "서술형"} · {problem.points ?? 10}점
+                  </span>
+                  <strong>{problem.title}</strong>
+                </summary>
+                <article className="archive-card problem-card">
+                  <p className="story-tag">{problem.issue}</p>
+                  <h3>{problem.title}</h3>
+                  <p>{problem.prompt}</p>
+                  <HallSubmissionForm canSubmit={Boolean(user)} problem={problem} />
+                  {problem.canGrade ? <HallSubmissionReview problem={problem} /> : null}
+                </article>
+              </details>
+            ))}
+            {!linkedProblems.length ? <p className="status-note">아직 연결된 문제가 없습니다.</p> : null}
+          </div>
+        </section>
+      ) : null}
     </div>
   );
 }

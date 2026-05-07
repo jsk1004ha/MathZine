@@ -1,5 +1,6 @@
 import { BoardComposer } from "@/components/board-composer";
-import { canCreateNotice, getCurrentUser } from "@/lib/auth";
+import { BoardPostDeleteButton } from "@/components/board-post-delete-button";
+import { canCreateNotice, canManageAdmin, getCurrentUser } from "@/lib/auth";
 import { listBoardPosts } from "@/lib/content";
 
 export const metadata = {
@@ -22,6 +23,7 @@ export default async function BoardPage({ searchParams }) {
   ]);
   const notices = kind === "discussion" ? [] : posts.filter((post) => post.kind === "notice");
   const discussions = kind === "notice" ? [] : posts.filter((post) => post.kind !== "notice");
+  const canDeletePosts = canManageAdmin(user);
 
   return (
     <div className="page-single">
@@ -61,6 +63,7 @@ export default async function BoardPage({ searchParams }) {
                 <p>{post.excerpt}</p>
                 <div className="board-body">{post.body}</div>
                 <span>{post.authorNickname}</span>
+                {canDeletePosts ? <BoardPostDeleteButton postId={post.id} title={post.title} /> : null}
               </article>
             ))}
           </div>
@@ -88,6 +91,7 @@ export default async function BoardPage({ searchParams }) {
               <p>{post.excerpt}</p>
               <div className="board-body">{post.body}</div>
               <span>{post.authorNickname}</span>
+              {canDeletePosts ? <BoardPostDeleteButton postId={post.id} title={post.title} /> : null}
             </article>
             ))}
           </div>

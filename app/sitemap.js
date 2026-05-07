@@ -1,5 +1,7 @@
 import { listArticles, listIssues } from "@/lib/content";
 
+export const dynamic = "force-dynamic";
+
 export default async function sitemap() {
   const [articles, issues] = await Promise.all([listArticles(), listIssues()]);
   const now = new Date();

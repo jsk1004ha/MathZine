@@ -45,7 +45,9 @@ export default async function HallOfFamePage() {
           <div className="story-list">
             {problems.map((problem) => (
               <article className="archive-card" key={problem.id}>
-                <p className="story-tag">{problem.issue}</p>
+                <p className="story-tag">
+                  {problem.type === "multiple_choice" ? "객관식" : problem.type === "short_answer" ? "주관식" : "서술형"} · {problem.issue ?? "독립 문제"}
+                </p>
                 <h3>{problem.title}</h3>
                 <p>{problem.prompt}</p>
                 {problem.article ? <a href={`/articles/${problem.article.slug}`}>문제가 실린 기사 보기</a> : null}
@@ -66,7 +68,7 @@ export default async function HallOfFamePage() {
                 <p className="story-tag">{submission.problem?.title ?? "문제"}</p>
                 <h2>{submission.nickname}</h2>
                 <p>
-                  {submission.originalFileName} · {submission.fileKind === "image" ? "이미지" : "PDF"}
+                  {submission.originalFileName || "텍스트 답안"} · {submission.fileKind === "image" ? "이미지" : submission.fileKind === "text" ? "텍스트" : "PDF"}
                 </p>
                 <span>
                   {submission.status} · {submission.awardedPoints} pts
