@@ -883,7 +883,7 @@ function clearDraft() {
               value={article.document.htmlHeight ?? 720}
             />
           </label>
-          <p className="inline-note">보안을 위해 스크립트, 폼, 팝업, 상위 페이지 접근 권한 없이 iframe 안에서만 렌더링됩니다.</p>
+          <p className="inline-note">영상 임베드를 위해 제한된 스크립트와 전체 화면은 허용하지만, 폼/동일 출처/상위 페이지 접근 권한은 막은 sandbox iframe 안에서 렌더링됩니다.</p>
         </section>
       ) : (
         <>

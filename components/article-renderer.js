@@ -264,9 +264,11 @@ function BlockRenderer({ block, numberMap }) {
 function HtmlDocumentRenderer({ document }) {
   return (
     <iframe
+      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen"
+      allowFullScreen
       className="article-block article-html-frame"
       referrerPolicy="no-referrer"
-      sandbox=""
+      sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox allow-presentation"
       srcDoc={document.html}
       style={{ height: `${document.htmlHeight}px` }}
       title="HTML article content"

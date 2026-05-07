@@ -9,9 +9,12 @@ const csp = [
   "img-src 'self' https: data: blob:",
   "media-src 'self' https: data: blob:",
   "style-src 'self' 'unsafe-inline'",
-  "script-src 'self' 'unsafe-inline'",
+  "script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com",
+  "script-src-elem 'self' 'unsafe-inline' https://static.cloudflareinsights.com",
   "font-src 'self' data:",
-  "connect-src 'self'",
+  "connect-src 'self' https://cloudflareinsights.com https://*.cloudflareinsights.com",
+  "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com https://iscience.riroschool.kr https://*.riroschool.kr",
+  "child-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com https://iscience.riroschool.kr https://*.riroschool.kr",
   "object-src 'none'",
   "upgrade-insecure-requests"
 ].join("; ");
