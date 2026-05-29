@@ -3,7 +3,7 @@ import globals from "globals";
 
 export default [
   {
-    ignores: [".next/**", "node_modules/**", "storage/uploads/**", "tmp_*.log", "tmp_*.err.log"]
+    ignores: [".next/**", ".omx/**", "node_modules/**", "storage/uploads/**", "tmp_*.log", "tmp_*.err.log"]
   },
   js.configs.recommended,
   {

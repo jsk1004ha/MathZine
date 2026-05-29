@@ -13,22 +13,26 @@ function formatToday() {
 export function Header({ user }) {
   return (
     <header className="site-header">
-      <div className="utility-bar">
+      <div className="utility-bar topline">
         <span>{formatToday()}</span>
-        <span className="utility-note">The math magazine of the genius math club.</span>
+        <span className="utility-note">Seoul Mathematical Review · Beta edition</span>
       </div>
-      <div className="masthead-row">
-        <div>
-          <p className="masthead-kicker">Mathematics Journal</p>
-          <Link className="masthead-logo" href="/">
-            MathZine
-          </Link>
+      <div className="masthead-row masthead">
+        <p className="masthead__aside masthead-kicker">
+          Mathematics Journal
+          <span>For readers who prove things</span>
+        </p>
+        <Link className="masthead-logo masthead__mark" href="/">
+          MathZine
+        </Link>
+        <div className="masthead__aside masthead-account">
+          <span>The math magazine of the genius math club.</span>
+          <AccountMenu user={user} />
         </div>
-        <AccountMenu user={user} />
       </div>
-      <nav aria-label="주요 섹션" className="section-nav">
-        <div className="nav-links">
-          <Link href="/">메인페이지</Link>
+      <nav aria-label="주요 섹션" className="section-nav nav">
+        <div className="nav-links nav__links">
+          <Link href="/">소개</Link>
           <Link href="/issues">호별 보기</Link>
           <Link href="/hall-of-fame">명예의 전당</Link>
           <Link href="/board">게시판</Link>
@@ -37,7 +41,7 @@ export function Header({ user }) {
           {user?.role === "teacher" ? <Link href="/admin/editorial">편집 관리</Link> : null}
           {!user ? <Link href="/login">로그인</Link> : null}
         </div>
-        <form action="/search" className="header-search">
+        <form action="/search" className="header-search search-box nav__actions">
           <input name="q" placeholder="기사 검색" type="search" />
           <button aria-label="검색" title="검색" type="submit">
             <svg aria-hidden="true" fill="none" height="18" viewBox="0 0 24 24" width="18">
