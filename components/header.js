@@ -11,46 +11,57 @@ function formatToday() {
 }
 
 export function Header({ user }) {
+  const canWrite = user && (user.role === "admin" || user.role === "reporter");
+
   return (
-    <header className="site-header">
-      <div className="utility-bar topline">
-        <span>{formatToday()}</span>
-        <span className="utility-note">Seoul Mathematical Review · Beta edition</span>
-      </div>
-      <div className="masthead-row masthead">
-        <p className="masthead__aside masthead-kicker">
-          Mathematics Journal
-          <span>For readers who prove things</span>
-        </p>
-        <Link className="masthead-logo masthead__mark" href="/">
+    <header className="site-header mz-site-header">
+      <div className="mz-masthead-bar">
+        <Link className="mz-icon-button mz-menu-link" href="/issues" aria-label="호별 보기">
+          <svg aria-hidden="true" fill="none" height="24" viewBox="0 0 24 24" width="24">
+            <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeLinecap="square" strokeWidth="1.7" />
+          </svg>
+        </Link>
+        <Link className="masthead-logo mz-wordmark" href="/">
           MathZine
         </Link>
-        <div className="masthead__aside masthead-account">
-          <span>The math magazine of the genius math club.</span>
-          <AccountMenu user={user} />
+        <div className="mz-header-actions">
+          <form action="/search" className="mz-header-search">
+            <input aria-label="기사 검색" name="q" placeholder="Search" type="search" />
+            <button aria-label="검색" className="mz-icon-button" title="검색" type="submit">
+              <svg aria-hidden="true" fill="none" height="22" viewBox="0 0 24 24" width="22">
+                <circle cx="11" cy="11" r="6.5" stroke="currentColor" strokeWidth="1.7" />
+                <path d="M16 16l4.5 4.5" stroke="currentColor" strokeLinecap="square" strokeWidth="1.7" />
+              </svg>
+            </button>
+          </form>
+          <Link className="mz-icon-button" href={canWrite ? "/studio" : "/hall-of-fame"} aria-label={canWrite ? "기사 작성" : "문제 풀기"}>
+            <svg aria-hidden="true" fill="none" height="22" viewBox="0 0 24 24" width="22">
+              <path d="M4.5 19.5h4.2L19.2 9 15 4.8 4.5 15.3v4.2Z" stroke="currentColor" strokeLinejoin="miter" strokeWidth="1.7" />
+              <path d="m13.8 6 4.2 4.2" stroke="currentColor" strokeLinecap="square" strokeWidth="1.7" />
+            </svg>
+          </Link>
+          <Link className="mz-icon-button" href={user ? "/profile" : "/login"} aria-label={user ? "프로필" : "로그인"}>
+            <svg aria-hidden="true" fill="currentColor" height="21" viewBox="0 0 24 24" width="21">
+              <path d="M12 12.2a4.4 4.4 0 1 0 0-8.8 4.4 4.4 0 0 0 0 8.8Zm-7 8.3c.7-3.5 3.2-5.7 7-5.7s6.3 2.2 7 5.7H5Z" />
+            </svg>
+          </Link>
         </div>
       </div>
-      <nav aria-label="주요 섹션" className="section-nav nav">
-        <div className="nav-links nav__links">
-          <Link href="/">소개</Link>
+      <nav aria-label="주요 섹션" className="mz-primary-nav">
+        <div className="mz-nav-links">
+          <Link href="/">매거진</Link>
           <Link href="/issues">호별 보기</Link>
           <Link href="/hall-of-fame">명예의 전당</Link>
           <Link href="/board">게시판</Link>
-          {user && (user.role === "admin" || user.role === "reporter") ? <Link href="/studio">기사 제출</Link> : null}
+          {canWrite ? <Link href="/studio">기사 제출</Link> : null}
           {user?.role === "admin" ? <Link href="/admin">어드민</Link> : null}
           {user?.role === "teacher" ? <Link href="/admin/editorial">편집 관리</Link> : null}
-          {!user ? <Link href="/login">로그인</Link> : null}
         </div>
-        <form action="/search" className="header-search search-box nav__actions">
-          <input name="q" placeholder="기사 검색" type="search" />
-          <button aria-label="검색" title="검색" type="submit">
-            <svg aria-hidden="true" fill="none" height="18" viewBox="0 0 24 24" width="18">
-              <circle cx="11" cy="11" r="6.5" stroke="currentColor" strokeWidth="1.8" />
-              <path d="M16 16L21 21" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
-            </svg>
-          </button>
-        </form>
       </nav>
+      <div className="mz-account-strip">
+        <span>{formatToday()}</span>
+        <AccountMenu user={user} />
+      </div>
     </header>
   );
 }
