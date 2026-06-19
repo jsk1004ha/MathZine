@@ -92,6 +92,47 @@ function isFilled(value) {
   return String(value ?? "").trim().length > 0;
 }
 
+function escapeHtmlAttribute(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("\"", "&quot;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+}
+
+function getImageAltText(fileName) {
+  return String(fileName ?? "article-image")
+    .replace(/\.[^.]+$/, "")
+    .replace(/[-_]+/g, " ")
+    .trim() || "article image";
+}
+
+function buildHtmlImageSnippet(asset) {
+  const src = escapeHtmlAttribute(asset.url);
+  const alt = escapeHtmlAttribute(getImageAltText(asset.name));
+
+  return `<figure style="margin:24px 0"><img src="${src}" alt="${alt}" style="width:100%;height:auto;display:block" /></figure>`;
+}
+
+async function uploadMediaFile(file, kind) {
+  const formData = new FormData();
+  formData.append("kind", kind);
+  formData.append("file", file);
+
+  const response = await fetch("/api/uploads/media", {
+    method: "POST",
+    body: formData
+  });
+
+  const payload = await response.json();
+
+  if (!response.ok) {
+    throw new Error(parseApiError(payload, "업로드에 실패했습니다."));
+  }
+
+  return payload.data;
+}
+
 function getSubmissionIssues(article) {
   const issues = [];
   const document = article?.document ?? {};
@@ -199,22 +240,8 @@ function MediaUploader({ accept, block, kind, onUpdate }) {
     setMessage("");
 
     try {
-      const formData = new FormData();
-      formData.append("kind", kind);
-      formData.append("file", file);
-
-      const response = await fetch("/api/uploads/media", {
-        method: "POST",
-        body: formData
-      });
-
-      const payload = await response.json();
-
-      if (!response.ok) {
-        throw new Error(parseApiError(payload, "업로드에 실패했습니다."));
-      }
-
-      onUpdate("src", payload.data.url);
+      const data = await uploadMediaFile(file, kind);
+      onUpdate("src", data.url);
       setMessage("업로드가 완료되었습니다.");
     } catch (error) {
       setMessage(error.message);
@@ -233,6 +260,68 @@ function MediaUploader({ accept, block, kind, onUpdate }) {
         <span>{kind === "image" ? "이미지 URL" : "영상 URL"}</span>
         <input onChange={(event) => onUpdate("src", event.target.value)} value={block.src} />
       </label>
+      {message ? <p className="inline-note">{message}</p> : null}
+    </div>
+  );
+}
+
+function HtmlImageUploader({ onInsert }) {
+  const [assets, setAssets] = useState([]);
+  const [message, setMessage] = useState("");
+  const [pending, setPending] = useState(false);
+
+  async function uploadImage(file) {
+    if (!file) {
+      return;
+    }
+
+    setPending(true);
+    setMessage("");
+
+    try {
+      const data = await uploadMediaFile(file, "image");
+      const asset = {
+        name: data.upload?.originalFileName || file.name,
+        url: data.url
+      };
+
+      setAssets((prev) => [asset, ...prev].slice(0, 6));
+      onInsert(asset);
+      setMessage(`${asset.name} 이미지를 HTML에 넣었습니다.`);
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <div className="html-media-uploader media-upload-panel">
+      <label>
+        <span>HTML 이미지</span>
+        <input
+          accept="image/*"
+          disabled={pending}
+          onChange={(event) => {
+            uploadImage(event.target.files?.[0] ?? null);
+            event.target.value = "";
+          }}
+          type="file"
+        />
+      </label>
+      {assets.length ? (
+        <div className="html-media-list">
+          {assets.map((asset) => (
+            <div className="html-media-row" key={`${asset.url}-${asset.name}`}>
+              <img alt="" src={asset.url} />
+              <input readOnly value={asset.url} />
+              <button className="ghost-button" onClick={() => onInsert(asset)} type="button">
+                태그 삽입
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : null}
       {message ? <p className="inline-note">{message}</p> : null}
     </div>
   );
@@ -444,6 +533,7 @@ export function StudioForm({ availableIssues = [] }) {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [showValidationGuide, setShowValidationGuide] = useState(false);
   const isRestoringDraftRef = useRef(true);
+  const htmlTextareaRef = useRef(null);
   const submissionIssues = getSubmissionIssues(article);
 
   useEffect(() => {
@@ -594,6 +684,30 @@ export function StudioForm({ availableIssues = [] }) {
         [field]: value
       }
     }));
+  }
+
+  function insertHtmlSnippet(snippet) {
+    const textarea = htmlTextareaRef.current;
+    const currentHtml = article.document.html ?? "";
+    const start = typeof textarea?.selectionStart === "number" ? textarea.selectionStart : currentHtml.length;
+    const end = typeof textarea?.selectionEnd === "number" ? textarea.selectionEnd : start;
+    const before = currentHtml.slice(0, start);
+    const after = currentHtml.slice(end);
+    const leadingBreak = before && !before.endsWith("\n") ? "\n" : "";
+    const trailingBreak = after && !after.startsWith("\n") ? "\n" : "";
+    const insertion = `${leadingBreak}${snippet}${trailingBreak}`;
+    const nextCursor = before.length + insertion.length;
+
+    updateDocumentField("html", `${before}${insertion}${after}`);
+
+    window.requestAnimationFrame(() => {
+      htmlTextareaRef.current?.focus();
+      htmlTextareaRef.current?.setSelectionRange(nextCursor, nextCursor);
+    });
+  }
+
+  function insertHtmlImage(asset) {
+    insertHtmlSnippet(buildHtmlImageSnippet(asset));
   }
 
   function changeEditorMode(mode) {
@@ -869,10 +983,12 @@ function clearDraft() {
             <textarea
               onChange={(event) => updateDocumentField("html", event.target.value)}
               placeholder={'<section style="padding:32px;font-family:sans-serif"><h1>나의 기사</h1><p>HTML로 자유롭게 구성하세요.</p></section>'}
+              ref={htmlTextareaRef}
               rows={18}
               value={article.document.html ?? ""}
             />
           </label>
+          <HtmlImageUploader onInsert={insertHtmlImage} />
           <label>
             <span>표시 높이(px)</span>
             <input

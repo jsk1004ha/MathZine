@@ -1,5 +1,5 @@
 const assert = require("node:assert/strict");
-const { mkdtempSync, rmSync, readFileSync } = require("node:fs");
+const { mkdirSync, mkdtempSync, rmSync, readFileSync, writeFileSync } = require("node:fs");
 const { tmpdir } = require("node:os");
 const path = require("node:path");
 const vm = require("node:vm");
@@ -130,6 +130,7 @@ async function main() {
   const content = await loadNamespace("lib/content.js");
   const auth = await loadNamespace("lib/auth.js");
   const pdf = await loadNamespace("lib/issue-pdf.js");
+  const print = await loadNamespace("lib/issue-print.js");
 
   await resetCollections(store);
 
@@ -142,6 +143,30 @@ async function main() {
     /80,000자 이하/
   );
   assert.equal(blocks.sanitizeArticleDocument({ mode: "html", html: "<p>x</p>", htmlHeight: 9999 }).htmlHeight, 2400);
+
+  mkdirSync(path.join(tempRoot, "uploads", "media"), { recursive: true });
+  writeFileSync(path.join(tempRoot, "uploads", "media", "html-image.png"), Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+  const printHtmlWithInlineMedia = await print.renderIssuePrintHtml({
+    issue: "테스트호",
+    articles: [
+      {
+        title: "HTML 이미지 기사",
+        deck: "데크",
+        section: "Feature",
+        issue: "테스트호",
+        authorNickname: "기자",
+        readTime: "1 min read",
+        submittedAt: new Date().toISOString(),
+        document: {
+          mode: "html",
+          html: '<article><img src="/api/media/media/html-image.png" alt="도형" /></article>',
+          htmlHeight: 320
+        }
+      }
+    ]
+  });
+  assert.match(printHtmlWithInlineMedia, /data:image\/png;base64/);
+  assert.doesNotMatch(printHtmlWithInlineMedia, /\/api\/media\/media\/html-image\.png/);
 
   const issue = await content.createIssue({ issue: "2026년 5월호" });
   const reporter = { id: "user_reporter", role: "reporter", nickname: "기자" };
