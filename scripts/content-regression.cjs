@@ -131,8 +131,18 @@ async function main() {
   const auth = await loadNamespace("lib/auth.js");
   const pdf = await loadNamespace("lib/issue-pdf.js");
   const print = await loadNamespace("lib/issue-print.js");
+  const htmlMedia = await loadNamespace("lib/html-media-tags.js");
 
   await resetCollections(store);
+
+  const htmlImageAsset = htmlMedia.createHtmlImageAsset({
+    name: 'rank-spectrum "draft".png',
+    url: "/api/media/media/rank-spectrum.png?size=wide&v=1"
+  });
+  assert.equal(htmlImageAsset.alt, 'rank spectrum "draft"');
+  assert.match(htmlImageAsset.tag, /^<figure /);
+  assert.match(htmlImageAsset.tag, /src="\/api\/media\/media\/rank-spectrum\.png\?size=wide&amp;v=1"/);
+  assert.match(htmlImageAsset.tag, /alt="rank spectrum &quot;draft&quot;"/);
 
   const htmlDocument = blocks.sanitizeArticleDocument({ mode: "html", html: "<h1>Hello</h1><p>World</p>", htmlHeight: 99 });
   assert.equal(htmlDocument.mode, "html");

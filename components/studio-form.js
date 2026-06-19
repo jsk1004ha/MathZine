@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { parseApiError } from "@/lib/api-client";
 import { ArticleRenderer } from "@/components/article-renderer";
 import { InlineRichTextField } from "@/components/inline-rich-text-field";
+import { buildHtmlImageSnippet, createHtmlImageAsset } from "@/lib/html-media-tags";
 import {
   calloutVariantOptions,
   createEmptyArticleDocument,
@@ -90,28 +91,6 @@ function getSelectedValues(event) {
 
 function isFilled(value) {
   return String(value ?? "").trim().length > 0;
-}
-
-function escapeHtmlAttribute(value) {
-  return String(value ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("\"", "&quot;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;");
-}
-
-function getImageAltText(fileName) {
-  return String(fileName ?? "article-image")
-    .replace(/\.[^.]+$/, "")
-    .replace(/[-_]+/g, " ")
-    .trim() || "article image";
-}
-
-function buildHtmlImageSnippet(asset) {
-  const src = escapeHtmlAttribute(asset.url);
-  const alt = escapeHtmlAttribute(getImageAltText(asset.name));
-
-  return `<figure style="margin:24px 0"><img src="${src}" alt="${alt}" style="width:100%;height:auto;display:block" /></figure>`;
 }
 
 async function uploadMediaFile(file, kind) {
@@ -269,9 +248,14 @@ function HtmlImageUploader({ onInsert }) {
   const [assets, setAssets] = useState([]);
   const [message, setMessage] = useState("");
   const [pending, setPending] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef(null);
 
-  async function uploadImage(file) {
-    if (!file) {
+  async function uploadImages(fileList) {
+    const files = Array.from(fileList ?? []).filter((file) => file.type.startsWith("image/"));
+
+    if (!files.length) {
+      setMessage("이미지 파일을 끌어오거나 선택해 주세요.");
       return;
     }
 
@@ -279,15 +263,20 @@ function HtmlImageUploader({ onInsert }) {
     setMessage("");
 
     try {
-      const data = await uploadMediaFile(file, "image");
-      const asset = {
-        name: data.upload?.originalFileName || file.name,
-        url: data.url
-      };
+      const nextAssets = [];
 
-      setAssets((prev) => [asset, ...prev].slice(0, 6));
-      onInsert(asset);
-      setMessage(`${asset.name} 이미지를 HTML에 넣었습니다.`);
+      for (const file of files) {
+        const data = await uploadMediaFile(file, "image");
+        nextAssets.push(
+          createHtmlImageAsset({
+            name: data.upload?.originalFileName || file.name,
+            url: data.url
+          })
+        );
+      }
+
+      setAssets((prev) => [...nextAssets, ...prev].slice(0, 12));
+      setMessage(`${nextAssets.length}개 이미지를 태그 목록에 추가했습니다.`);
     } catch (error) {
       setMessage(error.message);
     } finally {
@@ -296,34 +285,72 @@ function HtmlImageUploader({ onInsert }) {
   }
 
   return (
-    <div className="html-media-uploader media-upload-panel">
-      <label>
-        <span>HTML 이미지</span>
+    <aside className="html-media-uploader">
+      <div className="section-heading">
+        <p className="eyebrow">Images</p>
+        <span>태그 목록</span>
+      </div>
+      <div
+        className={`html-upload-dropzone${isDragging ? " is-dragging" : ""}`}
+        onDragEnter={(event) => {
+          event.preventDefault();
+          setIsDragging(true);
+        }}
+        onDragLeave={(event) => {
+          event.preventDefault();
+          const nextTarget = event.relatedTarget;
+
+          if (!(nextTarget instanceof Node) || !event.currentTarget.contains(nextTarget)) {
+            setIsDragging(false);
+          }
+        }}
+        onDragOver={(event) => {
+          event.preventDefault();
+          setIsDragging(true);
+        }}
+        onDrop={(event) => {
+          event.preventDefault();
+          setIsDragging(false);
+          uploadImages(event.dataTransfer.files);
+        }}
+      >
         <input
           accept="image/*"
+          className="html-upload-input"
           disabled={pending}
+          multiple
           onChange={(event) => {
-            uploadImage(event.target.files?.[0] ?? null);
+            uploadImages(event.target.files);
             event.target.value = "";
           }}
+          ref={fileInputRef}
           type="file"
         />
-      </label>
+        <button className="primary-button" disabled={pending} onClick={() => fileInputRef.current?.click()} type="button">
+          {pending ? "업로드 중..." : "사진 업로드"}
+        </button>
+        <p className="inline-note">여기에 사진을 끌어 놓거나 파일에서 선택하세요.</p>
+      </div>
       {assets.length ? (
         <div className="html-media-list">
           {assets.map((asset) => (
             <div className="html-media-row" key={`${asset.url}-${asset.name}`}>
               <img alt="" src={asset.url} />
-              <input readOnly value={asset.url} />
-              <button className="ghost-button" onClick={() => onInsert(asset)} type="button">
-                태그 삽입
-              </button>
+              <div className="html-media-details">
+                <strong>{asset.name}</strong>
+                <textarea readOnly rows={3} value={asset.tag} />
+                <button className="ghost-button" onClick={() => onInsert(asset)} type="button">
+                  이 태그 넣기
+                </button>
+              </div>
             </div>
           ))}
         </div>
-      ) : null}
+      ) : (
+        <p className="inline-note">업로드한 이미지 태그가 여기에 표시됩니다.</p>
+      )}
       {message ? <p className="inline-note">{message}</p> : null}
-    </div>
+    </aside>
   );
 }
 
@@ -978,28 +1005,32 @@ function clearDraft() {
             <p className="eyebrow">HTML Embed</p>
             <span>입력한 코드는 기사와 PDF에서 sandbox iframe으로 표시됩니다</span>
           </div>
-          <label>
-            <span>HTML 코드</span>
-            <textarea
-              onChange={(event) => updateDocumentField("html", event.target.value)}
-              placeholder={'<section style="padding:32px;font-family:sans-serif"><h1>나의 기사</h1><p>HTML로 자유롭게 구성하세요.</p></section>'}
-              ref={htmlTextareaRef}
-              rows={18}
-              value={article.document.html ?? ""}
-            />
-          </label>
-          <HtmlImageUploader onInsert={insertHtmlImage} />
-          <label>
-            <span>표시 높이(px)</span>
-            <input
-              max="2400"
-              min="240"
-              onChange={(event) => updateDocumentField("htmlHeight", event.target.value)}
-              type="number"
-              value={article.document.htmlHeight ?? 720}
-            />
-          </label>
-          <p className="inline-note">영상 임베드를 위해 제한된 스크립트와 전체 화면은 허용하지만, 폼/동일 출처/상위 페이지 접근 권한은 막은 sandbox iframe 안에서 렌더링됩니다.</p>
+          <div className="html-editor-workbench">
+            <div className="html-code-column">
+              <label>
+                <span>HTML 코드</span>
+                <textarea
+                  onChange={(event) => updateDocumentField("html", event.target.value)}
+                  placeholder={'<section style="padding:32px;font-family:sans-serif"><h1>나의 기사</h1><p>HTML로 자유롭게 구성하세요.</p></section>'}
+                  ref={htmlTextareaRef}
+                  rows={18}
+                  value={article.document.html ?? ""}
+                />
+              </label>
+              <label>
+                <span>표시 높이(px)</span>
+                <input
+                  max="2400"
+                  min="240"
+                  onChange={(event) => updateDocumentField("htmlHeight", event.target.value)}
+                  type="number"
+                  value={article.document.htmlHeight ?? 720}
+                />
+              </label>
+              <p className="inline-note">영상 임베드를 위해 제한된 스크립트와 전체 화면은 허용하지만, 폼/동일 출처/상위 페이지 접근 권한은 막은 sandbox iframe 안에서 렌더링됩니다.</p>
+            </div>
+            <HtmlImageUploader onInsert={insertHtmlImage} />
+          </div>
         </section>
       ) : (
         <>
