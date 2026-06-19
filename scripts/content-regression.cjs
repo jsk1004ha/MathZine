@@ -143,6 +143,18 @@ async function main() {
   assert.match(htmlImageAsset.tag, /^<figure /);
   assert.match(htmlImageAsset.tag, /src="\/api\/media\/media\/rank-spectrum\.png\?size=wide&amp;v=1"/);
   assert.match(htmlImageAsset.tag, /alt="rank spectrum &quot;draft&quot;"/);
+  const linkedHtmlImages = htmlMedia.replaceHtmlImageSources(
+    '<article><img src="./스크린샷 2026-06-19 151646.png" alt="계통도"><img src="images/missing.png"></article>',
+    [
+      htmlMedia.createHtmlImageAsset({
+        name: "스크린샷 2026-06-19 151646.png",
+        url: "/api/media/media/uploaded-tree.png"
+      })
+    ]
+  );
+  assert.equal(linkedHtmlImages.replacedCount, 1);
+  assert.match(linkedHtmlImages.html, /src="\/api\/media\/media\/uploaded-tree\.png"/);
+  assert.match(linkedHtmlImages.html, /src="images\/missing\.png"/);
 
   const htmlDocument = blocks.sanitizeArticleDocument({ mode: "html", html: "<h1>Hello</h1><p>World</p>", htmlHeight: 99 });
   assert.equal(htmlDocument.mode, "html");
