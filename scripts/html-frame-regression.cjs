@@ -47,8 +47,14 @@ function main() {
   assert.match(framedHtml, /scrollWidth/);
   assert.match(framedHtml, /style\.setProperty\("zoom"/);
   assert.match(framedHtml, /style\.setProperty\("translate"/);
+  assert.match(framedHtml, /createTreeWalker/);
+  assert.match(framedHtml, /getClientRects/);
+  assert.match(framedHtml, /calculateHtmlFrameContentHeight/);
   assert.equal(helper.calculateHtmlFrameScale(1_200, 900), 0.75);
   assert.equal(helper.calculateHtmlFrameScale(840, 900), 1);
+  assert.equal(helper.calculateHtmlFrameContentHeight(258.046875, 258), 259);
+  assert.equal(helper.calculateHtmlFrameContentHeight(266.25, 258), 283);
+  assert.equal(helper.calculateHtmlFrameContentHeight(240, 240), 240);
   assert.equal(helper.clampHtmlFrameHeight(10), 240);
   assert.equal(helper.clampHtmlFrameHeight(1_000_000), 100_000);
 
