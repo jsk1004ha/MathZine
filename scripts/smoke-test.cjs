@@ -1,5 +1,5 @@
 const { spawn, spawnSync } = require("node:child_process");
-const { readFileSync } = require("node:fs");
+const { existsSync, readFileSync } = require("node:fs");
 
 const PORT = 3011;
 const BASE_URL = `http://127.0.0.1:${PORT}`;
@@ -43,6 +43,8 @@ function verifyHeaderAccountSource() {
   const accountMenu = readFileSync("components/account-menu.js", "utf8");
   const profilePage = readFileSync("app/profile/page.js", "utf8");
   const searchPage = readFileSync("app/search/page.js", "utf8");
+  const sidebarPath = "components/site-sidebar.js";
+  const sidebar = existsSync(sidebarPath) ? readFileSync(sidebarPath, "utf8") : "";
   const violations = [];
 
   if (/<form[^>]+className="mz-header-search"/.test(header) || !/<Link[^>]+href="\/search"[^>]+aria-label="검색"/.test(header)) {
@@ -59,6 +61,27 @@ function verifyHeaderAccountSource() {
 
   if (!/LogoutButton/.test(profilePage)) {
     violations.push("Profile page must retain an authenticated logout control.");
+  }
+
+  if (!/SiteSidebar/.test(header) || /<Link[^>]+className="mz-icon-button mz-menu-link"/.test(header)) {
+    violations.push("Header hamburger must toggle SiteSidebar instead of linking directly to another page.");
+  }
+
+  if (
+    !/aria-controls="site-sidebar"/.test(sidebar) ||
+    !/aria-expanded=\{open\}/.test(sidebar) ||
+    !/id="site-sidebar"/.test(sidebar) ||
+    !/aria-modal="true"/.test(sidebar)
+  ) {
+    violations.push("Site sidebar must expose an accessible toggle and modal navigation panel.");
+  }
+
+  if (!/event\.key === "Escape"/.test(sidebar) || !/triggerRef\.current\?\.focus\(\)/.test(sidebar)) {
+    violations.push("Site sidebar must close with Escape and return focus to its trigger.");
+  }
+
+  if (!/className="mz-sidebar-backdrop"/.test(sidebar) || !/onClick=\{closeSidebar\}/.test(sidebar)) {
+    violations.push("Site sidebar backdrop must close the panel.");
   }
 
   if (violations.length) {

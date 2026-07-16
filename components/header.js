@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { AccountMenu } from "@/components/account-menu";
+import { SiteSidebar } from "@/components/site-sidebar";
 
 function formatToday() {
   return new Intl.DateTimeFormat("ko-KR", {
@@ -16,11 +17,12 @@ export function Header({ user }) {
   return (
     <header className="site-header mz-site-header">
       <div className="mz-masthead-bar">
-        <Link className="mz-icon-button mz-menu-link" href="/issues" aria-label="호별 보기">
-          <svg aria-hidden="true" fill="none" height="24" viewBox="0 0 24 24" width="24">
-            <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeLinecap="square" strokeWidth="1.7" />
-          </svg>
-        </Link>
+        <SiteSidebar
+          canWrite={Boolean(canWrite)}
+          isAdmin={user?.role === "admin"}
+          isTeacher={user?.role === "teacher"}
+          user={user ? { nickname: user.nickname } : null}
+        />
         <Link className="masthead-logo mz-wordmark" href="/">
           MathZine
         </Link>
