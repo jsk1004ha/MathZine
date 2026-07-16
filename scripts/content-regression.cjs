@@ -160,9 +160,11 @@ async function main() {
   assert.equal(htmlDocument.mode, "html");
   assert.equal(htmlDocument.htmlHeight, 240);
   assert.equal(blocks.extractPlainTextFromDocument(htmlDocument), "Hello World");
-  assert.throws(
-    () => blocks.sanitizeArticleDocument({ mode: "html", html: "x".repeat(blocks.ARTICLE_HTML_MAX_LENGTH + 1) }),
-    /80,000자 이하/
+  const longHtml = `<article>${"긴 본문".repeat(30_000)}</article>`;
+  assert.equal(
+    blocks.sanitizeArticleDocument({ mode: "html", html: longHtml }).html,
+    longHtml,
+    "HTML 기사 본문은 애플리케이션 글자 수 제한으로 잘리거나 거부되면 안 됩니다."
   );
   assert.equal(blocks.sanitizeArticleDocument({ mode: "html", html: "<p>x</p>", htmlHeight: 9999 }).htmlHeight, 2400);
 
