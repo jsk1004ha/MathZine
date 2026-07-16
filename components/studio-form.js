@@ -127,7 +127,7 @@ function getSubmissionIssues(article) {
   }
 
   if (!isFilled(article?.deck)) {
-    issues.push({ id: "deck", targetId: "studio-field-deck", message: "데크를 입력해 주세요." });
+    issues.push({ id: "deck", targetId: "studio-field-deck", message: "부제를 입력해 주세요." });
   }
 
   if (!isFilled(article?.issueSlug)) {
@@ -881,7 +881,7 @@ function clearDraft() {
         <span className="eyebrow">Article Desk</span>
         <h2>새 기사 제출</h2>
       </div>
-      <p className="panel-note">제목, 데크, 호수를 먼저 정리한 뒤 블록을 쌓으면 지면 흐름이 훨씬 안정적으로 잡힙니다.</p>
+      <p className="panel-note">제목, 부제, 호수를 먼저 정리한 뒤 블록을 쌓으면 지면 흐름이 훨씬 안정적으로 잡힙니다.</p>
       <div className="draft-status-row">
         <p className="inline-note">{draftMessage || (lastSavedAt ? `마지막 임시저장 ${new Date(lastSavedAt).toLocaleString("ko-KR")}` : "작성 내용은 브라우저에 임시저장됩니다.")}</p>
         <div className="draft-status-actions">
@@ -899,7 +899,7 @@ function clearDraft() {
       </div>
 
       <div id="studio-field-deck">
-        <InlineRichTextField label="데크" onChange={(value) => updateArticleField("deck", value)} rows={3} value={article.deck} />
+        <InlineRichTextField label="부제" onChange={(value) => updateArticleField("deck", value)} rows={3} value={article.deck} />
       </div>
 
       <div className="studio-row">

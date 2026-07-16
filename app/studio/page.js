@@ -37,7 +37,7 @@ export default async function StudioPage() {
         <p className="kicker">Reporter Studio</p>
         <h1 className="headline-lg">HTML 문서로 기사를 작성하고, 같은 iframe 렌더러로 미리 봅니다.</h1>
         <p className="deck">
-          MathZine의 새 기사 포맷은 블록 편집기와 HTML 모드를 모두 지원합니다. 이 화면은 제목, 데크, 호수,
+          MathZine의 새 기사 포맷은 블록 편집기와 HTML 모드를 모두 지원합니다. 이 화면은 제목, 부제, 호수,
           높이, 검토 상태를 한 번에 다루는 편집 데스크입니다.
         </p>
       </section>
@@ -69,7 +69,7 @@ export default async function StudioPage() {
             <p className="kicker">Submit checks</p>
             <div className="studio-checklist">
               <span className="check-item is-done">제목</span>
-              <span className="check-item is-done">데크</span>
+              <span className="check-item is-done">부제</span>
               <span className="check-item is-done">HTML</span>
               <span className="check-item is-done">높이</span>
             </div>

@@ -173,7 +173,7 @@ async function main() {
     articles: [
       {
         title: "HTML 이미지 기사",
-        deck: "데크",
+        deck: "부제",
         section: "Feature",
         issue: "테스트호",
         authorNickname: "기자",
@@ -192,10 +192,32 @@ async function main() {
 
   const issue = await content.createIssue({ issue: "2026년 5월호" });
   const reporter = { id: "user_reporter", role: "reporter", nickname: "기자" };
+  await assert.rejects(
+    () => content.createArticle(
+      {
+        title: "부제가 없는 기사",
+        deck: "",
+        section: "Feature",
+        tag: "Math",
+        issueSlug: issue.issueSlug,
+        readTime: "3 min read",
+        document: { mode: "html", html: "<p>본문</p>", htmlHeight: 320 }
+      },
+      reporter
+    ),
+    /기사 제목, 부제, 섹션/
+  );
+  for (const relativePath of ["components/studio-form.js", "app/studio/page.js", "lib/content.js"]) {
+    assert.doesNotMatch(
+      readFileSync(path.join(repoRoot, relativePath), "utf8"),
+      /\uB370\uD06C/,
+      `${relativePath}에 이전 자막 용어가 남아 있습니다.`
+    );
+  }
   const article = await content.createArticle(
     {
       title: "HTML 기사",
-      deck: "데크",
+      deck: "부제",
       section: "Feature",
       tag: "Math",
       issueSlug: issue.issueSlug,
@@ -208,14 +230,14 @@ async function main() {
   assert.equal(article.document.mode, "html");
   assert.equal((await store.readCollection("issues")).length, 1);
   await assert.rejects(
-    () => content.createArticle({ title: "없는 호", deck: "데크", section: "F", tag: "T", issueSlug: "missing", readTime: "1", document: { mode: "html", html: "<p>x</p>" } }, reporter),
+    () => content.createArticle({ title: "없는 호", deck: "부제", section: "F", tag: "T", issueSlug: "missing", readTime: "1", document: { mode: "html", html: "<p>x</p>" } }, reporter),
     /호수를 선택/
   );
   assert.equal((await store.readCollection("issues")).length, 1);
 
   await content.publishIssue(issue.issueSlug);
   await assert.rejects(
-    () => content.createArticle({ title: "공개 호", deck: "데크", section: "F", tag: "T", issueSlug: issue.issueSlug, readTime: "1", document: { mode: "html", html: "<p>x</p>" } }, reporter),
+    () => content.createArticle({ title: "공개 호", deck: "부제", section: "F", tag: "T", issueSlug: issue.issueSlug, readTime: "1", document: { mode: "html", html: "<p>x</p>" } }, reporter),
     /이미 공개된 호수/
   );
   await content.unpublishIssue(issue.issueSlug);
@@ -224,6 +246,11 @@ async function main() {
   assert.equal((await content.listIssues()).length, 0);
   assert.equal((await content.getIssueBundle(issue.issueSlug, { includeUnpublished: true, viewer: reporter }))?.articles.length, 1);
   assert.equal(await content.getIssueBundle(issue.issueSlug, { includeUnpublished: true, viewer: { id: "stranger", role: "reporter" } }), null);
+  await assert.rejects(
+    () => content.deleteIssue(issue.issueSlug),
+    /연결된 기사가 있어 삭제할 수 없습니다/
+  );
+  assert.equal((await store.readCollection("issues")).length, 1);
 
   await store.writeCollection("comments", [{ id: "comment_1", articleSlug: article.slug, userId: "u", authorNickname: "u", body: "x" }]);
   await store.writeCollection("hallProblems", [{ id: "problem_1", articleSlug: article.slug, title: "p", prompt: "p", status: "open", createdAt: new Date().toISOString(), type: "essay", points: 10, authorId: reporter.id }]);
@@ -234,6 +261,11 @@ async function main() {
   assert.equal((await store.readCollection("articles")).length, 0);
   assert.equal((await store.readCollection("hallProblems"))[0].articleSlug, null);
   assert.equal((await store.readCollection("hallSubmissions")).length, 1);
+  await content.updateIssueCover(issue.issueSlug, "/api/media/covers/empty-issue.png");
+  const deletedIssue = await content.deleteIssue(issue.issueSlug);
+  assert.equal(deletedIssue.issueSlug, issue.issueSlug);
+  assert.equal(deletedIssue.coverImageSrc, "/api/media/covers/empty-issue.png");
+  assert.equal((await store.readCollection("issues")).length, 0);
 
   await store.writeCollection("boardPosts", [{ id: "board_delete", title: "삭제", kind: "discussion" }]);
   await content.deleteBoardPost("board_delete");
@@ -243,7 +275,7 @@ async function main() {
   const problemArticle = await content.createArticle(
     {
       title: "문제 기사",
-      deck: "데크",
+      deck: "부제",
       section: "Feature",
       tag: "Math",
       issueSlug: issueForProblem.issueSlug,

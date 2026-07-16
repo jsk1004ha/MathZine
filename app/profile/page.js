@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
+import { LogoutButton } from "@/components/logout-button";
 import { ProfilePasswordForm } from "@/components/profile-password-form";
 import { getProfileActivity } from "@/lib/content";
 
@@ -39,6 +40,7 @@ export default async function ProfilePage() {
             <dd>{user.role}</dd>
           </div>
         </dl>
+        <LogoutButton />
       </section>
 
       <section className="section-panel">

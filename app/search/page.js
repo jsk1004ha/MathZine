@@ -24,7 +24,7 @@ export default async function SearchPage({ searchParams }) {
 
       <section className="section-panel">
         <form action="/search" className="search-form search-filter-form">
-          <input defaultValue={results.searchTerm} name="q" placeholder="제목, 본문, 태그, 닉네임 검색" type="search" />
+          <input aria-label="검색어" autoFocus defaultValue={results.searchTerm} name="q" placeholder="제목, 본문, 태그, 닉네임 검색" type="search" />
           <select defaultValue={results.filters.section} name="section">
             <option value="">모든 섹션</option>
             {results.availableSections.map((entry) => (

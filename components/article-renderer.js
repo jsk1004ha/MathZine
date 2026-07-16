@@ -1,10 +1,10 @@
 import {
   calloutVariantOptions,
   collectReferencedEntries,
-  getDocumentPullQuote,
   getReferenceNumberMap,
   normalizeArticleDocument
 } from "@/lib/article-blocks";
+import { HtmlDocumentFrame } from "@/components/html-document-frame";
 
 function renderInlineContent(text, prefix = "inline") {
   const source = String(text ?? "");
@@ -262,18 +262,7 @@ function BlockRenderer({ block, numberMap }) {
 }
 
 function HtmlDocumentRenderer({ document }) {
-  return (
-    <iframe
-      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen"
-      allowFullScreen
-      className="article-block article-html-frame"
-      referrerPolicy="no-referrer"
-      sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox allow-presentation"
-      srcDoc={document.html}
-      style={{ height: `${document.htmlHeight}px` }}
-      title="HTML article content"
-    />
-  );
+  return <HtmlDocumentFrame html={document.html} initialHeight={document.htmlHeight} />;
 }
 
 export function ArticleRenderer({ article, className = "", document }) {
@@ -317,5 +306,3 @@ export function ArticleRenderer({ article, className = "", document }) {
     </div>
   );
 }
-
-export const buildArticlePullQuote = getDocumentPullQuote;

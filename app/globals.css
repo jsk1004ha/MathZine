@@ -850,10 +850,12 @@ img {
 }
 
 .article-html-frame {
+  display: block;
   width: 100%;
   min-height: 240px;
-  border: 1px solid var(--line);
-  background: #fff;
+  border: 0;
+  background: transparent;
+  overflow: hidden;
 }
 
 .media-credit,
@@ -2362,7 +2364,6 @@ svg {
   font-size: 0.82em;
 }
 
-.proof-box,
 .problem-box,
 .callout,
 .article-callout,
@@ -2375,17 +2376,11 @@ svg {
   background: color-mix(in oklch, var(--bg), white 45%);
 }
 
-.article-pullquote p:last-child {
-  margin: 0;
-  font-size: clamp(20px, 2.2vw, 30px);
-  line-height: 1.28;
-}
-
 .article-html-frame {
   width: 100%;
-  min-height: 420px;
-  border: 1px solid var(--fg);
-  background: var(--surface);
+  min-height: 240px;
+  border: 0;
+  background: transparent;
 }
 
 .formula,
@@ -2885,40 +2880,6 @@ body {
   text-decoration: none;
 }
 
-.mz-header-search {
-  display: inline-grid;
-  grid-template-columns: minmax(0, 0fr) 34px;
-  align-items: center;
-  gap: 0;
-}
-
-.mz-header-search input {
-  width: 0;
-  min-width: 0;
-  height: 34px;
-  opacity: 0;
-  border: 0;
-  border-bottom: 1px solid transparent;
-  background: transparent;
-  color: var(--mz-black);
-  font-family: var(--mz-font-nowness);
-  font-size: 14px;
-  font-weight: 200;
-  letter-spacing: -0.003em;
-  outline: none;
-  transition: width 160ms ease, opacity 160ms ease, border-color 160ms ease;
-}
-
-.mz-header-search:focus-within {
-  grid-template-columns: minmax(160px, 220px) 34px;
-}
-
-.mz-header-search:focus-within input {
-  width: 100%;
-  opacity: 1;
-  border-color: var(--mz-black);
-}
-
 .mz-primary-nav {
   min-height: 44px;
   display: flex;
@@ -2983,6 +2944,15 @@ body {
 .mz-account-strip .primary-button,
 .mz-account-strip .ghost-button {
   border: 1px solid var(--mz-rule);
+}
+
+.profile-account-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
 }
 
 .magazine-home {
@@ -3817,10 +3787,6 @@ body {
     height: 30px;
   }
 
-  .mz-header-search:focus-within {
-    grid-template-columns: minmax(100px, 150px) 30px;
-  }
-
   .mz-primary-nav {
     justify-content: flex-start;
     overflow-x: auto;
@@ -3924,14 +3890,6 @@ body {
 }
 
 @media (max-width: 520px) {
-  .mz-header-search input {
-    display: none;
-  }
-
-  .mz-header-search:focus-within {
-    grid-template-columns: 30px;
-  }
-
   .mz-menu-link {
     margin-left: -2px;
   }

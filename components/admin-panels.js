@@ -347,6 +347,7 @@ export function AdminEditorialPanel({ issues, articles }) {
   const [issueForm, setIssueForm] = useState({ issue: "" });
   const [editorialMessage, setEditorialMessage] = useState("");
   const [pendingCoverIssueSlug, setPendingCoverIssueSlug] = useState("");
+  const [pendingDeleteIssueSlug, setPendingDeleteIssueSlug] = useState("");
   const [pendingIssueCreate, setPendingIssueCreate] = useState(false);
 
   async function createIssue(event) {
@@ -468,6 +469,33 @@ export function AdminEditorialPanel({ issues, articles }) {
     }
   }
 
+  async function deleteIssue(issueSlug, issueName) {
+    if (!window.confirm(`호수 "${issueName}"를 영구 삭제할까요?\n\n연결된 기사가 있으면 삭제되지 않습니다. 빈 호수의 표지 설정을 포함한 호수 기록만 삭제됩니다.`)) {
+      return;
+    }
+
+    setPendingDeleteIssueSlug(issueSlug);
+    setEditorialMessage("");
+
+    try {
+      const response = await fetch(`/api/admin/issues/${encodeURIComponent(issueSlug)}`, {
+        method: "DELETE"
+      });
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(parseApiError(payload, "호수 삭제에 실패했습니다."));
+      }
+
+      setEditorialMessage("빈 호수와 표지 설정을 삭제했습니다.");
+      router.refresh();
+    } catch (error) {
+      setEditorialMessage(`호수 삭제 실패: ${error.message}`);
+    } finally {
+      setPendingDeleteIssueSlug("");
+    }
+  }
+
   async function deleteArticle(slug, title) {
     if (!window.confirm(`기사 "${title}"만 삭제할까요? 댓글은 삭제되고, 연결 문제/제출 기록은 명예의 전당에 남겨 둡니다.`)) {
       return;
@@ -542,6 +570,14 @@ export function AdminEditorialPanel({ issues, articles }) {
                     호수 공개
                   </button>
                 )}
+                <button
+                  className="ghost-button danger-button"
+                  disabled={pendingDeleteIssueSlug === issue.issueSlug}
+                  onClick={() => deleteIssue(issue.issueSlug, issue.issue)}
+                  type="button"
+                >
+                  {pendingDeleteIssueSlug === issue.issueSlug ? "삭제 중..." : "호수 삭제"}
+                </button>
               </div>
             </div>
           ))}

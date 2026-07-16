@@ -107,13 +107,6 @@ export default async function ArticlePage({ params }) {
             {isPreview ? <p className="status-note">이 기사는 아직 공개 전이며 작성자와 어드민만 미리 볼 수 있습니다.</p> : null}
           </header>
 
-          {article.pullQuote ? (
-            <aside className="proof-box article-pullquote">
-              <p className="article-proof-label">Proof note</p>
-              <p>{article.pullQuote}</p>
-            </aside>
-          ) : null}
-
           <div className="article-body article-body-full editorial-article-body">
             <ArticleRenderer article={article} />
           </div>
