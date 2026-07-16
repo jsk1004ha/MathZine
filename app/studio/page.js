@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { StudioForm } from "@/components/studio-form";
-import { canWriteArticles, getCurrentUser } from "@/lib/auth";
-import { listArticlesByAuthor, listWritableIssues } from "@/lib/content";
+import { canEditArticle, canWriteArticles, getCurrentUser } from "@/lib/auth";
+import { getArticleBySlug, listArticlesByAuthor, listEditorialArticles, listWritableIssues } from "@/lib/content";
+import { sanitizeText } from "@/lib/security";
 
-export default async function StudioPage() {
+export default async function StudioPage({ searchParams }) {
   const user = await getCurrentUser();
 
   if (!user) {
@@ -28,17 +29,55 @@ export default async function StudioPage() {
     );
   }
 
-  const [articles, writableIssues] = await Promise.all([listArticlesByAuthor(user.id), listWritableIssues()]);
+  const resolvedSearchParams = (await searchParams) ?? {};
+  const rawEditSlug = Array.isArray(resolvedSearchParams.edit) ? resolvedSearchParams.edit[0] : resolvedSearchParams.edit;
+  const editSlug = sanitizeText(rawEditSlug, { maxLength: 120 });
+  const [articles, writableIssues, editingArticle] = await Promise.all([
+    user.role === "admin" ? listEditorialArticles() : listArticlesByAuthor(user.id),
+    listWritableIssues(),
+    editSlug ? getArticleBySlug(editSlug, { includeUnpublished: true, viewer: user }) : null
+  ]);
+
+  if (editSlug && (!editingArticle || !canEditArticle(user, editingArticle))) {
+    return (
+      <div className="page-single">
+        <section className="section-panel panel">
+          <div className="section-heading section-title">
+            <p className="kicker">Article Desk</p>
+            <h1>수정할 수 없는 기사입니다</h1>
+          </div>
+          <p>기사가 없거나 현재 계정에 수정 권한이 없습니다.</p>
+          <Link className="primary-button btn" href="/studio">새 기사 작성으로 돌아가기</Link>
+        </section>
+      </div>
+    );
+  }
+
+  const availableIssues =
+    editingArticle && !writableIssues.some((issue) => issue.issueSlug === editingArticle.issueSlug)
+      ? [
+          {
+            issue: editingArticle.issue,
+            issueSlug: editingArticle.issueSlug,
+            status: editingArticle.status === "published" ? "published" : "draft"
+          },
+          ...writableIssues
+        ]
+      : writableIssues;
   const latestArticle = articles[0];
+  const statusArticle = editingArticle ?? latestArticle;
 
   return (
     <div className="page-single">
       <section className="studio-hero section">
         <p className="kicker">Reporter Studio</p>
-        <h1 className="headline-lg">HTML 문서로 기사를 작성하고, 같은 iframe 렌더러로 미리 봅니다.</h1>
+        <h1 className="headline-lg">
+          {editingArticle ? "기존 기사를 불러와 같은 화면에서 바로 수정합니다." : "HTML 문서로 기사를 작성하고, 같은 iframe 렌더러로 미리 봅니다."}
+        </h1>
         <p className="deck">
-          MathZine의 새 기사 포맷은 블록 편집기와 HTML 모드를 모두 지원합니다. 이 화면은 제목, 부제, 호수,
-          높이, 검토 상태를 한 번에 다루는 편집 데스크입니다.
+          {editingArticle
+            ? "기사 주소와 독자 반응은 유지됩니다. 수정 원고는 별도의 브라우저 임시저장 공간에 안전하게 보관됩니다."
+            : "MathZine의 새 기사 포맷은 블록 편집기와 HTML 모드를 모두 지원합니다. 이 화면은 제목, 부제, 호수, 높이, 검토 상태를 한 번에 다루는 편집 데스크입니다."}
         </p>
       </section>
 
@@ -54,8 +93,8 @@ export default async function StudioPage() {
               </div>
               <div className="rank__row">
                 <b>상태</b>
-                <span>{latestArticle?.status ?? "draft"}</span>
-                <span>{latestArticle ? "검토" : "대기"}</span>
+                <span>{statusArticle?.status ?? "draft"}</span>
+                <span>{statusArticle ? "검토" : "대기"}</span>
               </div>
               <div className="rank__row">
                 <b>공개</b>
@@ -78,15 +117,20 @@ export default async function StudioPage() {
 
           <div className="studio-panel">
             <div className="section-heading section-title">
-              <p className="kicker">내가 쓴 기사</p>
+              <p className="kicker">{user.role === "admin" ? "전체 기사" : "내가 쓴 기사"}</p>
               <span>{articles.length} articles</span>
             </div>
             <div className="submission-queue">
               {articles.map((article) => (
-                <Link href={`/articles/${article.slug}`} key={article.slug}>
-                  <span className="label">{article.issue} · {article.status}</span>
-                  <strong>{article.title}</strong>
-                </Link>
+                <div className="submission-queue-item" key={article.slug}>
+                  <Link className="submission-article-link" href={`/articles/${article.slug}`}>
+                    <span className="label">{article.issue} · {article.status}</span>
+                    <strong>{article.title}</strong>
+                  </Link>
+                  <Link className="submission-edit-link" href={`/studio?edit=${encodeURIComponent(article.slug)}`}>
+                    수정
+                  </Link>
+                </div>
               ))}
               {!articles.length ? <p className="inline-note">아직 제출한 기사가 없습니다.</p> : null}
             </div>
@@ -94,7 +138,12 @@ export default async function StudioPage() {
         </aside>
 
         <div className="studio-main">
-          <StudioForm availableIssues={writableIssues} />
+          <StudioForm
+            availableIssues={availableIssues}
+            editingSlug={editingArticle?.slug ?? ""}
+            initialArticle={editingArticle}
+            key={editingArticle?.slug ?? "new"}
+          />
         </div>
       </section>
     </div>

@@ -543,6 +543,23 @@ img {
   gap: 8px;
 }
 
+.article-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.article-header-actions .status-note {
+  flex: 1 1 360px;
+  margin: 0;
+}
+
+.article-edit-link {
+  flex: 0 0 auto;
+  text-decoration: none;
+}
+
 .article-hero,
 .issue-hero {
   background: linear-gradient(180deg, #f7f3ea 0%, #ece4d4 100%);
@@ -2243,11 +2260,37 @@ svg {
 .rail-list a,
 .rail-list li,
 .article-meta-rail span,
-.submission-queue a {
+.submission-article-link {
   display: grid;
   gap: 6px;
   padding: 14px 0;
   border-bottom: var(--rule);
+}
+
+.submission-queue-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  border-bottom: var(--rule);
+}
+
+.submission-queue .submission-article-link {
+  min-width: 0;
+  border-bottom: 0;
+}
+
+.submission-queue .submission-edit-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 7px 10px;
+  border: var(--rule);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-decoration: none;
+  text-transform: uppercase;
 }
 
 .metrics {
@@ -2677,6 +2720,10 @@ svg {
   .studio-sidebar,
   .editor-sticky-panel {
     position: static;
+  }
+
+  .studio-main {
+    order: -1;
   }
 
   .html-editor-workbench {

@@ -231,6 +231,39 @@ async function main() {
   assert.equal(article.issueSlug, issue.issueSlug);
   assert.equal(article.document.mode, "html");
   assert.equal((await store.readCollection("issues")).length, 1);
+  const strangerReporter = { id: "user_stranger", role: "reporter", nickname: "다른 기자" };
+  const adminEditor = { id: "user_admin", role: "admin", nickname: "편집장" };
+  const updatePayload = {
+    title: "수정된 HTML 기사",
+    deck: "수정된 부제",
+    section: "Research",
+    tag: "Algebra",
+    issueSlug: issue.issueSlug,
+    readTime: "7 min read",
+    document: { mode: "html", html: "<article><h1>수정 본문</h1><p>보존 검사</p></article>", htmlHeight: 640 }
+  };
+  await store.writeCollection(
+    "articles",
+    (await store.readCollection("articles")).map((entry) =>
+      entry.slug === article.slug
+        ? { ...entry, views: 17, likeUserIds: ["reader_1"], linkedProblemIds: ["problem_existing"] }
+        : entry
+    )
+  );
+  await assert.rejects(
+    () => content.updateArticle(article.slug, updatePayload, strangerReporter),
+    /수정 권한/
+  );
+  const updatedArticle = await content.updateArticle(article.slug, updatePayload, reporter);
+  assert.equal(updatedArticle.title, updatePayload.title);
+  assert.equal(updatedArticle.slug, article.slug);
+  assert.equal(updatedArticle.id, article.id);
+  assert.equal(updatedArticle.authorId, reporter.id);
+  assert.equal(updatedArticle.status, "submitted");
+  assert.equal(updatedArticle.views, 17);
+  assert.deepEqual(updatedArticle.likeUserIds, ["reader_1"]);
+  assert.deepEqual(updatedArticle.linkedProblemIds, ["problem_existing"]);
+  assert.equal(updatedArticle.document.htmlHeight, 640);
   await assert.rejects(
     () => content.createArticle({ title: "없는 호", deck: "부제", section: "F", tag: "T", issueSlug: "missing", readTime: "1", document: { mode: "html", html: "<p>x</p>" } }, reporter),
     /호수를 선택/
@@ -238,6 +271,15 @@ async function main() {
   assert.equal((await store.readCollection("issues")).length, 1);
 
   await content.publishIssue(issue.issueSlug);
+  const publishedArticle = (await store.readCollection("articles")).find((entry) => entry.slug === article.slug);
+  const adminUpdatedArticle = await content.updateArticle(
+    article.slug,
+    { ...updatePayload, deck: "공개 후 교정된 부제" },
+    adminEditor
+  );
+  assert.equal(adminUpdatedArticle.status, "published");
+  assert.equal(adminUpdatedArticle.publishedAt, publishedArticle.publishedAt);
+  assert.equal(adminUpdatedArticle.deck, "공개 후 교정된 부제");
   await assert.rejects(
     () => content.createArticle({ title: "공개 호", deck: "부제", section: "F", tag: "T", issueSlug: issue.issueSlug, readTime: "1", document: { mode: "html", html: "<p>x</p>" } }, reporter),
     /이미 공개된 호수/

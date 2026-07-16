@@ -46,6 +46,31 @@ function getInitialArticle(availableIssues = []) {
   };
 }
 
+function getEditableArticle(initialArticle, availableIssues = []) {
+  if (!initialArticle) {
+    return getInitialArticle(availableIssues);
+  }
+
+  const document =
+    initialArticle.document?.mode || !initialArticle.document?.blocks
+      ? (initialArticle.document ?? createEmptyHtmlArticleDocument())
+      : {
+          ...initialArticle.document,
+          mode: "legacy"
+        };
+
+  return {
+    title: initialArticle.title ?? "",
+    deck: initialArticle.deck ?? "",
+    section: initialArticle.section ?? "Feature",
+    tag: initialArticle.tag ?? "Mathematics",
+    issue: initialArticle.issue ?? "",
+    issueSlug: initialArticle.issueSlug ?? "",
+    readTime: initialArticle.readTime ?? "5 min read",
+    document
+  };
+}
+
 function hasMeaningfulDraft(article) {
   const document = article?.document ?? {};
   const blocks = Array.isArray(document.blocks) ? document.blocks : [];
@@ -65,9 +90,9 @@ function hasMeaningfulDraft(article) {
   );
 }
 
-function readStoredDraft() {
+function readStoredDraft(draftKey) {
   try {
-    const raw = window.localStorage.getItem(STUDIO_DRAFT_KEY);
+    const raw = window.localStorage.getItem(draftKey);
 
     if (!raw) {
       return null;
@@ -510,9 +535,12 @@ function BlockEditor({
   );
 }
 
-export function StudioForm({ availableIssues = [] }) {
+export function StudioForm({ availableIssues = [], editingSlug = "", initialArticle = null }) {
   const router = useRouter();
-  const [article, setArticle] = useState(() => getInitialArticle(availableIssues));
+  const isEditing = Boolean(editingSlug && initialArticle);
+  const isPublished = initialArticle?.status === "published";
+  const draftKey = editingSlug ? `${STUDIO_DRAFT_KEY}:${editingSlug}` : STUDIO_DRAFT_KEY;
+  const [article, setArticle] = useState(() => getEditableArticle(initialArticle, availableIssues));
   const [articleMessage, setArticleMessage] = useState("");
   const [articlePending, setArticlePending] = useState(false);
   const [draftMessage, setDraftMessage] = useState("");
@@ -522,10 +550,11 @@ export function StudioForm({ availableIssues = [] }) {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [showValidationGuide, setShowValidationGuide] = useState(false);
   const isRestoringDraftRef = useRef(true);
+  const skipInitialDraftSaveRef = useRef(true);
   const submissionIssues = getSubmissionIssues(article);
 
   useEffect(() => {
-    const storedDraft = readStoredDraft();
+    const storedDraft = readStoredDraft(draftKey);
 
     if (storedDraft?.article) {
       const selectedIssue =
@@ -551,15 +580,20 @@ export function StudioForm({ availableIssues = [] }) {
 
     isRestoringDraftRef.current = false;
     setDraftReady(true);
-  }, [availableIssues]);
+  }, [availableIssues, draftKey]);
 
   useEffect(() => {
     if (!draftReady) {
       return undefined;
     }
 
+    if (skipInitialDraftSaveRef.current) {
+      skipInitialDraftSaveRef.current = false;
+      return undefined;
+    }
+
     if (!hasMeaningfulDraft(article)) {
-      window.localStorage.removeItem(STUDIO_DRAFT_KEY);
+      window.localStorage.removeItem(draftKey);
       setLastSavedAt("");
       setIsDirty(false);
       return undefined;
@@ -572,14 +606,14 @@ export function StudioForm({ availableIssues = [] }) {
     setIsDirty(true);
     const timer = window.setTimeout(() => {
       const savedAt = new Date().toISOString();
-      window.localStorage.setItem(STUDIO_DRAFT_KEY, JSON.stringify({ savedAt, article }));
+      window.localStorage.setItem(draftKey, JSON.stringify({ savedAt, article }));
       setLastSavedAt(savedAt);
       setDraftMessage(`임시저장됨 · ${new Date(savedAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })}`);
       setIsDirty(false);
     }, 900);
 
     return () => window.clearTimeout(timer);
-  }, [article, draftReady]);
+  }, [article, draftKey, draftReady]);
 
   useEffect(() => {
     if (!isDirty) {
@@ -801,8 +835,8 @@ export function StudioForm({ availableIssues = [] }) {
     }
 
     try {
-      const response = await fetch("/api/articles", {
-        method: "POST",
+      const response = await fetch(isEditing ? `/api/articles/${encodeURIComponent(editingSlug)}` : "/api/articles", {
+        method: isEditing ? "PATCH" : "POST",
         headers: {
           "Content-Type": "application/json"
         },
@@ -815,11 +849,19 @@ export function StudioForm({ availableIssues = [] }) {
         throw new Error(parseApiError(payload, "기사 저장에 실패했습니다."));
       }
 
-      window.localStorage.removeItem(STUDIO_DRAFT_KEY);
+      window.localStorage.removeItem(draftKey);
+      setIsDirty(false);
+
+      if (isEditing) {
+        setArticleMessage("수정 사항을 저장했습니다.");
+        router.push(`/articles/${encodeURIComponent(editingSlug)}`);
+        router.refresh();
+        return;
+      }
+
       setArticle(getInitialArticle(availableIssues));
       setLastSavedAt("");
       setDraftMessage("임시저장본을 비우고 새 원고 상태로 초기화했습니다.");
-      setIsDirty(false);
       setArticleMessage("기사가 저장되었고, 현재는 편집부 검토 대기 상태입니다.");
       router.refresh();
     } catch (error) {
@@ -830,9 +872,10 @@ export function StudioForm({ availableIssues = [] }) {
   }
 
 function clearDraft() {
-    window.localStorage.removeItem(STUDIO_DRAFT_KEY);
-    setArticle(getInitialArticle(availableIssues));
-    setDraftMessage("임시저장본을 지웠습니다.");
+    window.localStorage.removeItem(draftKey);
+    skipInitialDraftSaveRef.current = true;
+    setArticle(getEditableArticle(initialArticle, availableIssues));
+    setDraftMessage(isEditing ? "마지막으로 저장된 기사 상태로 되돌렸습니다." : "임시저장본을 지웠습니다.");
     setLastSavedAt("");
     setIsDirty(false);
   }
@@ -879,9 +922,13 @@ function clearDraft() {
       <form className="studio-card" onSubmit={submitArticle}>
       <div className="studio-card-header">
         <span className="eyebrow">Article Desk</span>
-        <h2>새 기사 제출</h2>
+        <h2>{isEditing ? "기사 수정" : "새 기사 제출"}</h2>
       </div>
-      <p className="panel-note">제목, 부제, 호수를 먼저 정리한 뒤 블록을 쌓으면 지면 흐름이 훨씬 안정적으로 잡힙니다.</p>
+      <p className="panel-note">
+        {isEditing
+          ? "기존 기사 URL과 반응 데이터는 유지되며, 저장한 내용만 바로 반영됩니다."
+          : "제목, 부제, 호수를 먼저 정리한 뒤 블록을 쌓으면 지면 흐름이 훨씬 안정적으로 잡힙니다."}
+      </p>
       <div className="draft-status-row">
         <p className="inline-note">{draftMessage || (lastSavedAt ? `마지막 임시저장 ${new Date(lastSavedAt).toLocaleString("ko-KR")}` : "작성 내용은 브라우저에 임시저장됩니다.")}</p>
         <div className="draft-status-actions">
@@ -889,7 +936,7 @@ function clearDraft() {
             팝업 미리보기
           </button>
           <button className="ghost-button" onClick={clearDraft} type="button">
-            임시저장 비우기
+            {isEditing ? "변경 내용 되돌리기" : "임시저장 비우기"}
           </button>
         </div>
       </div>
@@ -916,7 +963,7 @@ function clearDraft() {
       <div className="studio-row">
         <label id="studio-field-issue">
           <span>호수</span>
-          <select onChange={(event) => selectIssue(event.target.value)} value={article.issueSlug}>
+          <select disabled={isPublished} onChange={(event) => selectIssue(event.target.value)} value={article.issueSlug}>
             <option value="">호수를 선택하세요</option>
             {availableIssues.map((issue) => (
               <option key={issue.issueSlug} value={issue.issueSlug}>
@@ -924,6 +971,7 @@ function clearDraft() {
               </option>
             ))}
           </select>
+          {isPublished ? <span className="inline-note">공개된 기사의 호수는 변경할 수 없습니다.</span> : null}
           {!availableIssues.length ? <span className="inline-note">admin 또는 teacher가 먼저 편집 관리에서 호수를 만들어야 합니다.</span> : null}
         </label>
         <label id="studio-field-readTime">
@@ -1092,7 +1140,7 @@ function clearDraft() {
 
       <div className="form-submit-row">
         <button className="primary-button wide-button" disabled={articlePending} type="submit">
-          {articlePending ? "제출 중..." : "편집부에 제출"}
+          {articlePending ? (isEditing ? "저장 중..." : "제출 중...") : (isEditing ? "수정 사항 저장" : "편집부에 제출")}
         </button>
         {submissionIssues.length ? (
           <p className="error-note">

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { ArticleRenderer } from "@/components/article-renderer";
 import { CommentForm } from "@/components/comment-form";
 import { HallProblemForm } from "@/components/hall-problem-form";
@@ -5,7 +6,7 @@ import { HallSubmissionForm } from "@/components/hall-submission-form";
 import { HallSubmissionReview } from "@/components/hall-submission-review";
 import { LikeButton } from "@/components/like-button";
 import { ViewTracker } from "@/components/view-tracker";
-import { canCreateHallProblemForArticle, canPreviewArticle, getCurrentUser } from "@/lib/auth";
+import { canCreateHallProblemForArticle, canEditArticle, canPreviewArticle, getCurrentUser } from "@/lib/auth";
 import { getArticleBySlug, getArticlePageBundle } from "@/lib/content";
 
 export const dynamic = "force-dynamic";
@@ -79,6 +80,7 @@ export default async function ArticlePage({ params }) {
   const linkedProblems = bundle?.article?.linkedProblems ?? article.linkedProblems ?? [];
   const liked = user ? article.likeUserIds.includes(user.id) : false;
   const canCreateProblem = canCreateHallProblemForArticle(user, article);
+  const canEdit = canEditArticle(user, article);
   const primaryProblem = linkedProblems[0];
 
   return (
@@ -104,7 +106,16 @@ export default async function ArticlePage({ params }) {
             </p>
             <h1 className="headline-lg">{article.title}</h1>
             <p className="deck">{article.deck}</p>
-            {isPreview ? <p className="status-note">이 기사는 아직 공개 전이며 작성자와 어드민만 미리 볼 수 있습니다.</p> : null}
+            {isPreview || canEdit ? (
+              <div className="article-header-actions">
+                {isPreview ? <p className="status-note">이 기사는 아직 공개 전이며 작성자와 어드민만 미리 볼 수 있습니다.</p> : null}
+                {canEdit ? (
+                  <Link className="ghost-button article-edit-link" href={`/studio?edit=${encodeURIComponent(article.slug)}`}>
+                    기사 수정
+                  </Link>
+                ) : null}
+              </div>
+            ) : null}
           </header>
 
           <div className="article-body article-body-full editorial-article-body">
